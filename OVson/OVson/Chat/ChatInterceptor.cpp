@@ -15,6 +15,7 @@
 #include <sstream>
 #include <iomanip>
 #include <unordered_map>
+#include <unordered_set>
 #include <cstring>
 
 
@@ -27,6 +28,7 @@ static ULONGLONG g_lastTeamScanTick = 0;
 static int g_mode = 0; // 0 bedwars, 1 skywars, 2 duels
 static ULONGLONG g_bootstrapStartTick = 0;
 static std::unordered_map<std::string, int> g_teamProbeTries; // name -> tries during bootstrap
+static std::unordered_set<std::string> g_processedPlayers; // İşlenen oyuncular (başarılı veya başarısız)
 
 static const char *mcColorForTeam(const std::string &team)
 {
@@ -755,6 +757,7 @@ static void tailLogOnce()
                 ChatSDK::showPrefixed("Detected ONLINE. Saving players...");
                 parsePlayersFromOnlineLine(chat);
                 g_nextFetchIdx = 0; // reset fetch pointer
+                g_processedPlayers.clear(); // yeni liste geldi, işlenen oyuncuları temizle
             }
         }
     }
@@ -799,19 +802,64 @@ void ChatInterceptor::poll()
         {
             ULONGLONG nowMs = (ULONGLONG)GetTickCount();
             size_t size = g_onlinePlayers.size();
+            
+            // Tüm oyuncular işlendi mi kontrol et
+            bool allProcessed = true;
+            for (const auto &player : g_onlinePlayers)
+            {
+                if (g_processedPlayers.find(player) == g_processedPlayers.end())
+                {
+                    allProcessed = false;
+                    break;
+                }
+            }
+            if (allProcessed)
+            {
+                return; // Tüm oyuncular işlendi, durdur
+            }
+
             size_t pickedIdx = size; // invalid
+            // Sadece işlenmemiş oyuncuları ara
             for (size_t cnt = 0; cnt < size; ++cnt)
             {
                 size_t idx = (g_nextFetchIdx + cnt) % size;
                 const std::string &candidate = g_onlinePlayers[idx];
+                
+                // Zaten başarıyla işlenmiş oyuncuları atla
+                if (g_processedPlayers.find(candidate) != g_processedPlayers.end())
+                    continue;
+                
+                // Cooldown kontrolü - cooldown'da olanları atla (tekrar denenecek)
                 auto itCooldown = g_retryUntil.find(candidate);
                 if (itCooldown != g_retryUntil.end() && nowMs < itCooldown->second)
-                    continue; // still cooling down
+                {
+                    // Cooldown'da, şimdilik atla
+                    continue;
+                }
+                
                 pickedIdx = idx;
                 break;
             }
             if (pickedIdx == size)
-                return; // no eligible this tick
+            {
+                // Şu anda işlenebilecek oyuncu yok (hepsi işlenmiş veya cooldown'da)
+                // Sadece tüm oyuncular başarıyla işlenmişse durdur
+                bool allSuccessfullyProcessed = true;
+                for (const auto &player : g_onlinePlayers)
+                {
+                    if (g_processedPlayers.find(player) == g_processedPlayers.end())
+                    {
+                        allSuccessfullyProcessed = false;
+                        break;
+                    }
+                }
+                if (allSuccessfullyProcessed)
+                {
+                    return; // Tüm oyuncular başarıyla işlendi
+                }
+                // Bazıları cooldown'da, bekleyelim
+                return;
+            }
             g_nextFetchIdx = pickedIdx;
             const std::string apiKey = Config::getApiKey();
             if (!apiKey.empty())
@@ -847,18 +895,58 @@ void ChatInterceptor::poll()
                             team = itT->second;
                         else
                             team = resolveTeamForName(name);
-                        const char *tcol = mcColorForTeam(team);
+                        
+                        // İlk oyuncu için çok daha agresif takım tespiti
                         if (!g_onlinePlayers.empty() && name == g_onlinePlayers[0])
                         {
-                            (void)resolveTeamForName(name); 
-                            std::string secondTry = resolveTeamForName(name);
-                            if (!secondTry.empty())
+                            Logger::info("İlk oyuncu takım tespiti başlatılıyor: %s", name.c_str());
+                            
+                            // Önce scoreboard'ı güncelle
+                            updateTeamsFromScoreboard();
+                            
+                            // Birden fazla deneme yap
+                            for (int attempt = 0; attempt < 5 && team.empty(); ++attempt)
                             {
-                                team = secondTry;
-                                g_playerTeamColor[name] = team;
-                                tcol = mcColorForTeam(team);
+                                // Scoreboard'dan kontrol et
+                                std::string scoreboardTeam = resolveTeamForName(name);
+                                if (!scoreboardTeam.empty())
+                                {
+                                    team = scoreboardTeam;
+                                    g_playerTeamColor[name] = team;
+                                    Logger::info("İlk oyuncu takımı bulundu (scoreboard, deneme %d): %s -> %s", attempt + 1, name.c_str(), team.c_str());
+                                    break;
+                                }
+                                
+                                // Tab list'ten kontrol et (resolveTeamForName zaten tab list'i de kontrol ediyor)
+                                // Ama ekstra bir deneme yapalım
+                                if (attempt < 3)
+                                {
+                                    Sleep(150); // Her deneme arasında bekle
+                                    updateTeamsFromScoreboard(); // Scoreboard'ı tekrar güncelle
+                                }
+                            }
+                            
+                            // Hala bulunamadıysa son bir deneme
+                            if (team.empty())
+                            {
+                                Sleep(200);
+                                updateTeamsFromScoreboard();
+                                std::string finalTeam = resolveTeamForName(name);
+                                if (!finalTeam.empty())
+                                {
+                                    team = finalTeam;
+                                    g_playerTeamColor[name] = team;
+                                    Logger::info("İlk oyuncu takımı son denemede bulundu: %s -> %s", name.c_str(), team.c_str());
+                                }
+                            }
+                            
+                            if (team.empty())
+                            {
+                                Logger::info("İlk oyuncu takımı bulunamadı: %s", name.c_str());
                             }
                         }
+                        
+                        const char *tcol = mcColorForTeam(team);
                         const char *gray = "\xC2\xA7"
                                            "7";
                         const char *gold = "\xC2\xA7"
@@ -883,27 +971,30 @@ void ChatInterceptor::poll()
                         msg += "\xE2\x9C\xAB";
                         msg += black;
                         msg += "] ";
-                        const char *tInit = teamInitial(team);
+                        // İlk oyuncu için ekstra kontrol - chat'e yazdırmadan önce
+                        if (!g_onlinePlayers.empty() && name == g_onlinePlayers[0] && team.empty())
+                        {
+                            // Son bir kez daha kontrol et
+                            updateTeamsFromScoreboard();
+                            std::string lastCheck = resolveTeamForName(name);
+                            if (!lastCheck.empty())
+                            {
+                                team = lastCheck;
+                                g_playerTeamColor[name] = team;
+                                Logger::info("İlk oyuncu takımı chat yazdırmadan önce bulundu: %s -> %s", name.c_str(), team.c_str());
+                            }
+                        }
+                        
+                        // Takım bilgisini güncelle (eğer bulunduysa)
                         if (!team.empty())
                         {
-                            msg += black;
-                            msg += "[";
-                            msg += tcol;
-                            msg += tInit;
-                            msg += black;
-                            msg += "] ";
+                            tcol = mcColorForTeam(team);
                         }
+                        
                         if (team.empty())
                         {
                             ULONGLONG nowProbe = (ULONGLONG)GetTickCount();
-                            updateTeamsFromScoreboard();
-                            std::string retry1 = resolveTeamForName(name);
-                            if (!retry1.empty())
-                            {
-                                team = retry1;
-                                tcol = mcColorForTeam(team);
-                            }
-                            if (team.empty() && (nowProbe - g_bootstrapStartTick) < 3000)
+                            if ((nowProbe - g_bootstrapStartTick) < 3000)
                             {
                                 int tries = g_teamProbeTries[name];
                                 if (tries < 5)
@@ -914,6 +1005,18 @@ void ChatInterceptor::poll()
                                     return;               // allow scoreboard/tablist to populate
                                 }
                             }
+                        }
+                        
+                        // Chat mesajını oluştur - takım bilgisini mutlaka kullan
+                        const char *tInit = teamInitial(team);
+                        if (!team.empty())
+                        {
+                            msg += black;
+                            msg += "[";
+                            msg += tcol;
+                            msg += tInit;
+                            msg += black;
+                            msg += "] ";
                         }
                         msg += (team.empty() ? white : tcol);
                         msg += name;
@@ -1022,11 +1125,13 @@ void ChatInterceptor::poll()
                         ChatSDK::showClientMessage(ChatSDK::formatPrefix() + msg);
                         Logger::info("statlar alındı: %s star=%d fkdr=%s finals=%d wins=%d", name.c_str(), stats->bedwarsStar, fkdrSs.str().c_str(), stats->bedwarsFinalKills, stats->bedwarsWins);
                         g_retryUntil.erase(name); // success clears cooldown
+                        g_processedPlayers.insert(name); // İşlendi olarak işaretle
                     }
                     else
                     {
                         Logger::info("statlar alınamadı: %s", name.c_str());
                         g_retryUntil[name] = nowMs + 5000ULL; // retry after 5s
+                        // Başarısız olan oyuncuları işlenmiş olarak işaretleme, tekrar denenecek
                         g_nextFetchIdx = (g_nextFetchIdx + 1) % size;
                         return;
                     }
@@ -1035,6 +1140,7 @@ void ChatInterceptor::poll()
                 {
                     Logger::info("UUID bulunamadı: %s", name.c_str());
                     g_retryUntil[name] = nowMs + 5000ULL; // retry after 5s
+                    // UUID bulunamayan oyuncuları işlenmiş olarak işaretleme, tekrar denenecek
                     g_nextFetchIdx = (g_nextFetchIdx + 1) % size;
                     return;
                 }

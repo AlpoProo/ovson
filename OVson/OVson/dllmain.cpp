@@ -73,13 +73,13 @@ void init(void* instance) {
             }
         }
 
-        DWORD startTick = GetTickCount();
-        bool wasEndDown = (GetAsyncKeyState(VK_END) & 0x8000) != 0; 
+        bool wasEndDown = false;
         while (true) {
             SHORT endState = GetAsyncKeyState(VK_END);
             bool isEndDown = (endState & 0x8000) != 0;
-            if ((GetTickCount() - startTick) > 300 && !wasEndDown && isEndDown) {
-                ChatSDK::showClientMessage(ChatSDK::formatPrefix() + std::string("quit."));
+            if (!wasEndDown && isEndDown) {
+                // End tuşuna basıldığında hemen "quitting" mesajı göster
+                ChatSDK::showClientMessage(ChatSDK::formatPrefix() + std::string("quitting..."));
                 break;
             }
             wasEndDown = isEndDown;

@@ -1,6 +1,3 @@
-/* too many junk code about login cba to remove all of them */
-
-
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
