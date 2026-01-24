@@ -5,5 +5,6 @@ CPlayer::CPlayer(jobject instance) {
 }
 
 void CPlayer::Cleanup() {
-	lc->env->DeleteLocalRef(this->playerInstance);
+	JNIEnv* env = lc->getEnv();
+	if (env) env->DeleteLocalRef(this->playerInstance);
 }

@@ -17,7 +17,8 @@ static void JNICALL onMethodEntry(jvmtiEnv *jvmti_env, JNIEnv *jni_env, jthread 
 
 bool ChatHook::install()
 {
-	if (!lc->jvmti || !lc->env)
+	JNIEnv* env = lc->getEnv();
+	if (!lc->jvmti || !env)
 		return false;
 	Logger::info("Installing chat hook");
 
@@ -26,7 +27,7 @@ bool ChatHook::install()
 		Logger::error("EntityPlayerSP not found");
 		return false;
 	}
-	g_sendChatMessage = lc->env->GetMethodID(playerCls, "sendChatMessage", "(Ljava/lang/String;)V");
+	g_sendChatMessage = env->GetMethodID(playerCls, "sendChatMessage", "(Ljava/lang/String;)V");
 	if (!g_sendChatMessage){
 		Logger::error("sendChatMessage method not found");
 		return false;

@@ -1,12 +1,30 @@
-#include "RenderHook.h"
-#include "StatsOverlay.h"
-#include "../Utils/Logger.h"
-#include <fstream>
 #include <Windows.h>
 #include <gl/GL.h>
+#include <fstream>
+#include "RenderHook.h"
+#include "StatsOverlay.h"
+#include "DefenseRenderer.h"
+#include "NotificationManager.h"
+#include "ClickGUI.h"
+#include "../Utils/Logger.h"
+#include "../Config/Config.h"
+#include "../Utils/SensitivityFix.h"
+
+#include <queue>
+#include <mutex>
+#include <functional>
+#include <algorithm>
+#include "../Utils/Timer.h"
 
 static std::ofstream g_debugLog;
 static bool g_hookInstalled = false;
+
+static std::queue<std::function<void()>> g_taskQueue;
+static std::mutex g_queueMutex;
+static float g_frameDelta = 0.0f;
+
+typedef void (__stdcall *PFNGLUSEPROGRAMPROC_LOCAL)(unsigned int);
+static PFNGLUSEPROGRAMPROC_LOCAL g_glUseProgram = nullptr;
 
 static HMODULE g_MinHookModule = nullptr;
 
@@ -109,7 +127,7 @@ bool LoadMinHook() {
 	
 	char tempPath[MAX_PATH];
 	GetTempPathA(MAX_PATH, tempPath);
-	std::string dllPath = std::string(tempPath) + "MinHook_" + std::to_string(GetTickCount()) + ".dll";
+	std::string dllPath = std::string(tempPath) + "MinHook_" + std::to_string(GetTickCount64()) + ".dll";
 	
 	HANDLE hFile = CreateFileA(dllPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
@@ -155,21 +173,119 @@ bool LoadMinHook() {
 	return true;
 }
 
+static WNDPROC originalWndProc = nullptr;
+static HWND g_gameHwnd = nullptr;
+
+LRESULT CALLBACK hookedWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (Render::ClickGUI::isOpen()) {
+        Render::ClickGUI::handleMessage(uMsg, wParam, lParam);
+
+        switch (uMsg) {
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONUP:
+            case WM_RBUTTONDOWN:
+            case WM_RBUTTONUP:
+            case WM_MBUTTONDOWN:
+            case WM_MBUTTONUP:
+            case WM_MOUSEMOVE:
+            case WM_MOUSEWHEEL:
+            case WM_KEYDOWN:
+            case WM_KEYUP:
+            case WM_CHAR:
+            case WM_SYSKEYDOWN:
+            case WM_SYSKEYUP:
+                return 0;
+        }
+    }
+
+    return CallWindowProc(originalWndProc, hwnd, uMsg, wParam, lParam);
+}
+
 BOOL WINAPI hookedSwapBuffers(HDC hdc) {
 	static int frameCount = 0;
 	frameCount++;
 	
-	if (frameCount == 1) {
-		writeDebugLog("wglSwapBuffers hook triggered!");
-	}
+	g_frameDelta = TimeUtil::getDelta();
+
+	if (g_glUseProgram) g_glUseProgram(0);
+
+    if (!g_gameHwnd) {
+        g_gameHwnd = WindowFromDC(hdc);
+        if (g_gameHwnd) {
+            originalWndProc = (WNDPROC)SetWindowLongPtr(g_gameHwnd, GWLP_WNDPROC, (LONG_PTR)hookedWndProc);
+            writeDebugLog("WndProc hooked successfully!");
+        }
+    }
 	
 	if (frameCount % 100 == 0) {
 		char buf[128];
 		sprintf_s(buf, "Rendered %d frames", frameCount);
 		writeDebugLog(buf);
 	}
+
+    if (Config::isMotionBlurEnabled()) {
+        float amount = Config::getMotionBlurAmount();
+        if (amount > 0.01f) {
+            GLint viewport[4];
+            glGetIntegerv(GL_VIEWPORT, viewport);
+            float sw = (float)viewport[2];
+            float sh = (float)viewport[3];
+
+            glPushMatrix();
+            glPushAttrib(GL_ALL_ATTRIB_BITS);
+            glDisable(GL_TEXTURE_2D);
+            glDisable(GL_LIGHTING);
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            glMatrixMode(GL_PROJECTION);
+            glPushMatrix();
+            glLoadIdentity();
+            glOrtho(0, sw, sh, 0, -1, 1);
+            glMatrixMode(GL_MODELVIEW);
+            glPushMatrix();
+            glLoadIdentity();
+
+            float alpha = amount * 0.15f;
+            glColor4f(0.0f, 0.0f, 0.0f, alpha);
+            glBegin(GL_QUADS);
+            glVertex2f(0, 0);
+            glVertex2f(sw, 0);
+            glVertex2f(sw, sh);
+            glVertex2f(0, sh);
+            glEnd();
+
+            glMatrixMode(GL_PROJECTION);
+            glPopMatrix();
+            glMatrixMode(GL_MODELVIEW);
+            glPopMatrix();
+            glPopAttrib();
+            glPopMatrix();
+        }
+    }
 	
-	StatsOverlay::render(hdc);
+	StatsOverlay::render((void*)hdc);
+	
+	BedDefense::DefenseRenderer::getInstance()->render((void*)hdc, 0.0);
+    
+    if (Config::isNotificationsEnabled()) {
+        Render::NotificationManager::getInstance()->render(hdc);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_queueMutex);
+        while (!g_taskQueue.empty()) {
+            g_taskQueue.front()();
+            g_taskQueue.pop();
+        }
+    }
+
+    if (Render::ClickGUI::isOpen()) {
+        FocusFix::setIngameFocus(false);
+    }
+    Render::ClickGUI::render(hdc);
+
 	return originalSwapBuffers(hdc);
 }
 
@@ -231,9 +347,21 @@ bool RenderHook::install()
 	
 	StatsOverlay::init();
 	writeDebugLog("StatsOverlay initialized");
+    
+    Render::ClickGUI::init();
 	
+	g_glUseProgram = (PFNGLUSEPROGRAMPROC_LOCAL)wglGetProcAddress("glUseProgram");
+	if (g_glUseProgram) writeDebugLog("glUseProgram loaded successfully");
+	else writeDebugLog("glUseProgram not supported/found");
+
+    Render::NotificationManager::getInstance()->add("System", "OVson Client loaded successfully!", Render::NotificationType::Success);
+
 	Logger::info("RenderHook: wglSwapBuffers hook installed successfully!");
 	return true;
+}
+
+float RenderHook::getDelta() {
+    return g_frameDelta;
 }
 
 void RenderHook::uninstall()
@@ -244,6 +372,11 @@ void RenderHook::uninstall()
 		if (pMH_DisableHook) {
 			pMH_DisableHook(MH_ALL_HOOKS);
 			writeDebugLog("MinHook disabled");
+		}
+		
+		if (g_gameHwnd && originalWndProc) {
+			SetWindowLongPtr(g_gameHwnd, GWLP_WNDPROC, (LONG_PTR)originalWndProc);
+			writeDebugLog("WndProc restored");
 		}
 		
 		Sleep(100);
@@ -267,4 +400,9 @@ void RenderHook::uninstall()
 void RenderHook::poll()
 {
 	// not used when hook is active
+}
+
+void RenderHook::enqueueTask(std::function<void()> task) {
+    std::lock_guard<std::mutex> lock(g_queueMutex);
+    g_taskQueue.push(task);
 }

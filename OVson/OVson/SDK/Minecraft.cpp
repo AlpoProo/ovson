@@ -6,29 +6,37 @@ jclass CMinecraft::GetClass() {
 }
 
 jobject CMinecraft::GetInstance() {
-
 	jclass minecraftClass = this->GetClass();
+	JNIEnv* env = lc->getEnv();
+	if (!env || !minecraftClass) return nullptr;
 
-	jfieldID getMinecraft = lc->env->GetStaticFieldID(minecraftClass, "theMinecraft", "Lnet/minecraft/client/Minecraft;");
-	jobject rtrn = lc->env->GetStaticObjectField(minecraftClass, getMinecraft);
+	jfieldID getMinecraft = env->GetStaticFieldID(minecraftClass, "theMinecraft", "Lnet/minecraft/client/Minecraft;");
+    if (!getMinecraft) getMinecraft = env->GetStaticFieldID(minecraftClass, "field_71432_P", "Lnet/minecraft/client/Minecraft;");
+    
+    if (!getMinecraft) return nullptr;
 
-	lc->env->DeleteLocalRef(minecraftClass);
+	jobject rtrn = env->GetStaticObjectField(minecraftClass, getMinecraft);
 
 	return rtrn;
-
 }
 
 CPlayer CMinecraft::GetLocalPlayer() {
 	jclass minecraftClass = this->GetClass();
 	jobject minecraftObject = this->GetInstance();
+	JNIEnv* env = lc->getEnv();
+	if (!env || !minecraftClass || !minecraftObject) {
+        if (minecraftObject) env->DeleteLocalRef(minecraftObject);
+        return CPlayer(nullptr);
+    }
 
-	jfieldID getPlayer = lc->env->GetFieldID(minecraftClass, "thePlayer", "Lnet/minecraft/client/entity/EntityPlayerSP;");
-	jobject rtrn = lc->env->GetObjectField(minecraftObject, getPlayer);
+	jfieldID getPlayer = env->GetFieldID(minecraftClass, "thePlayer", "Lnet/minecraft/client/entity/EntityPlayerSP;");
+    if (!getPlayer) getPlayer = env->GetFieldID(minecraftClass, "field_71439_g", "Lnet/minecraft/client/entity/EntityPlayerSP;");
 
-	lc->env->DeleteLocalRef(minecraftClass);
-	lc->env->DeleteLocalRef(minecraftObject);
+	jobject rtrn = nullptr;
+    if (getPlayer) {
+        rtrn = env->GetObjectField(minecraftObject, getPlayer);
+    }
 
+	env->DeleteLocalRef(minecraftObject);
 	return CPlayer(rtrn);
-
-
 }

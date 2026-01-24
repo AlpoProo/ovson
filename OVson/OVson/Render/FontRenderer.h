@@ -10,7 +10,7 @@ public:
 	~FontRenderer();
 
 	bool init(HDC hdc);
-	void drawString(float x, float y, const std::string& text, uint32_t color);
+	void drawString(float x, float y, const std::string& text, uint32_t color, float scale = 0.5f);
 	float getStringWidth(const std::string& text);
 	float getHeight() const { return 16.0f; }
 	bool isInitialized() const { return m_initialized; }

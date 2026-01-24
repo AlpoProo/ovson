@@ -4,7 +4,7 @@
 #include <vector>
 
 FontRenderer::FontRenderer()
-	: m_initialized(false), m_texture(0), m_bitmapWidth(1024), m_bitmapHeight(1024), m_bitmap(nullptr)
+	: m_initialized(false), m_texture(0), m_bitmapWidth(2048), m_bitmapHeight(2048), m_bitmap(nullptr)
 {
 	memset(m_charWidths, 0, sizeof(m_charWidths));
 }
@@ -30,6 +30,7 @@ bool FontRenderer::init(HDC hdc)
 	BITMAPINFO bmi = {};
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = m_bitmapWidth;
+	bmi.bmiHeader.biHeight = -m_bitmapHeight;
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
@@ -38,6 +39,7 @@ bool FontRenderer::init(HDC hdc)
 	HBITMAP hBitmap = CreateDIBSection(memDC, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
 	if (!hBitmap) {
 		DeleteDC(memDC);
+		OutputDebugStringA("[OVson] FontRenderer: CreateDIBSection failed\n");
 		return false;
 	}
 
@@ -78,6 +80,7 @@ bool FontRenderer::init(HDC hdc)
 
 	SetBkMode(memDC, TRANSPARENT); 
 	SetTextColor(memDC, RGB(0, 0, 0));
+	SetTextAlign(memDC, TA_TOP | TA_LEFT);
 	
 	const int charSize = 64; 
 	const int charsPerRow = m_bitmapWidth / charSize;
@@ -89,8 +92,8 @@ bool FontRenderer::init(HDC hdc)
 		GetTextExtentPoint32A(memDC, ch, 1, &sz);
 		m_charWidths[i] = sz.cx;
 		
-		int x = ((i - 32) % charsPerRow) * charSize;
-		int y = ((i - 32) / charsPerRow) * charSize;
+		int x = (((i - 32) % charsPerRow) * charSize) + 8;
+		int y = (((i - 32) / charsPerRow) * charSize) + 8; 
 		
 		TextOutA(memDC, x, y, ch, 1);
 	}
@@ -133,7 +136,7 @@ float FontRenderer::getCharWidth(char c) const {
 	return (float)m_charWidths[(unsigned char)c];
 }
 
-void FontRenderer::drawString(float x, float y, const std::string& text, uint32_t color)
+void FontRenderer::drawString(float x, float y, const std::string& text, uint32_t color, float scale)
 {
 	if (!m_initialized || text.empty()) return;
 
@@ -152,7 +155,7 @@ void FontRenderer::drawString(float x, float y, const std::string& text, uint32_
 	
 	const int charSize = 64; 
 	const int charsPerRow = m_bitmapWidth / charSize;
-	const float renderScale = 0.5f;
+	const float renderScale = scale;
 
 	float currentX = x;
 
@@ -162,30 +165,36 @@ void FontRenderer::drawString(float x, float y, const std::string& text, uint32_
 		if (ch < 32 || ch > 126) ch = '?';
 
 		int i = ch - 32;
+		const int charSize = 64;
+		const int charsPerRow = m_bitmapWidth / charSize;
 		int col = i % charsPerRow;
 		int row = i / charsPerRow;
 
 		float realWidth = getCharWidth((char)ch);
-		float renderWidth = realWidth * renderScale;
+		float renderWidth = (realWidth + 16.0f) * renderScale;
+		float renderHeight = (float)charSize * renderScale; 
 
-		float u0 = (col * charSize) / (float)m_bitmapWidth;
-		float v0 = (row * charSize) / (float)m_bitmapHeight;
-		float u1 = (col * charSize + charSize) / (float)m_bitmapWidth;
-		float v1 = (row * charSize + charSize) / (float)m_bitmapHeight;
+		float u0 = (float)(col * charSize) / (float)m_bitmapWidth;
+		float v0 = (float)(row * charSize) / (float)m_bitmapHeight;
+		float u1 = u0 + ((realWidth + 16.0f) / (float)m_bitmapWidth);
+		float v1 = v0 + ((float)charSize / (float)m_bitmapHeight);
 
-		float x0 = currentX;
-		float y0 = y;
-		float x1 = x0 + (charSize * renderScale);
-		float y1 = y0 + (charSize * renderScale);
+		float x0 = currentX - (8.0f * renderScale);
+		float y0 = y - (8.0f * renderScale);
+		float x1 = x0 + renderWidth;
+		float y1 = y0 + renderHeight;
 
 		glTexCoord2f(u0, v0); glVertex2f(x0, y0);
 		glTexCoord2f(u1, v0); glVertex2f(x1, y0);
 		glTexCoord2f(u1, v1); glVertex2f(x1, y1);
 		glTexCoord2f(u0, v1); glVertex2f(x0, y1);
 
-		currentX += renderWidth + 1.0f;
+		currentX += (realWidth + 1.0f) * renderScale; 
 	}
 	glEnd();
+
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 float FontRenderer::getStringWidth(const std::string& text)
@@ -193,7 +202,7 @@ float FontRenderer::getStringWidth(const std::string& text)
 	float w = 0.0f;
 	const float renderScale = 0.5f;
 	for (char c : text) {
-		w += (getCharWidth(c) * renderScale) + 1.0f;
+		w += (getCharWidth(c) * renderScale) + (1.0f * renderScale);
 	}
 	return w;
 }

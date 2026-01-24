@@ -13,6 +13,7 @@ namespace Hypixel {
 		int bedwarsWins = 0;
 		int bedwarsLosses = 0;
 		std::string teamColor;
+		bool isNicked = false;
 	};
 
 	std::optional<std::string> getUuidByName(const std::string& name);

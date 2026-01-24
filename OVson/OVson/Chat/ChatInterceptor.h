@@ -16,6 +16,7 @@ namespace ChatInterceptor {
 	// stats map access for GUI overlay
 	extern std::unordered_map<std::string, Hypixel::PlayerStats> g_playerStatsMap;
 	extern std::mutex g_statsMutex;
+    extern std::unordered_map<std::string, std::string> g_playerTeamColor;
 }
 
 

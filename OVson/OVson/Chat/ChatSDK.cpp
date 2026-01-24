@@ -6,50 +6,87 @@
 
 static bool callSendChatMessage(const std::string &text)
 {
+	JNIEnv* env = lc->getEnv();
+	if (!env) return false;
 	CMinecraft mc;
 	CPlayer player = mc.GetLocalPlayer();
-	if (!lc->env || !lc->GetClass("net.minecraft.client.entity.EntityPlayerSP"))
-		return false;
+	if (!player.Get()) return false;
 
 	jclass playerCls = lc->GetClass("net.minecraft.client.entity.EntityPlayerSP");
-	jmethodID sendChat = lc->env->GetMethodID(playerCls, "sendChatMessage", "(Ljava/lang/String;)V");
-	if (!sendChat)
+    if (!playerCls) {
+        player.Cleanup();
+        return false;
+    }
+
+	jmethodID sendChat = env->GetMethodID(playerCls, "sendChatMessage", "(Ljava/lang/String;)V");
+    if (!sendChat) sendChat = env->GetMethodID(playerCls, "func_71165_d", "(Ljava/lang/String;)V");
+    
+	if (!sendChat) {
+		player.Cleanup();
 		return false;
-	jstring jtext = lc->env->NewStringUTF(text.c_str());
-	lc->env->CallVoidMethod(player.Get(), sendChat, jtext);
-	lc->env->DeleteLocalRef(jtext);
+	}
+
+	jstring jtext = env->NewStringUTF(text.c_str());
+	env->CallVoidMethod(player.Get(), sendChat, jtext);
+	env->DeleteLocalRef(jtext);
 	player.Cleanup();
 	return true;
 }
 
 static bool callAddChatMessage(const std::string &text)
 {
-	if (!lc->env)
+	JNIEnv* env = lc->getEnv();
+	if (!env)
 		return false;
 	jclass mcCls = lc->GetClass("net.minecraft.client.Minecraft");
 	if (!mcCls)
 		return false;
-	jfieldID theMc = lc->env->GetStaticFieldID(mcCls, "theMinecraft", "Lnet/minecraft/client/Minecraft;");
-	jobject mcObj = lc->env->GetStaticObjectField(mcCls, theMc);
-	jfieldID f_ingame = lc->env->GetFieldID(mcCls, "ingameGUI", "Lnet/minecraft/client/gui/GuiIngame;");
-	jobject ingame = lc->env->GetObjectField(mcObj, f_ingame);
+	
+    jfieldID theMc = env->GetStaticFieldID(mcCls, "theMinecraft", "Lnet/minecraft/client/Minecraft;");
+    if (!theMc) theMc = env->GetStaticFieldID(mcCls, "field_71432_P", "Lnet/minecraft/client/Minecraft;");
+    if (!theMc) return false;
+
+	jobject mcObj = env->GetStaticObjectField(mcCls, theMc);
+    if (!mcObj) return false;
+
+	jfieldID f_ingame = env->GetFieldID(mcCls, "ingameGUI", "Lnet/minecraft/client/gui/GuiIngame;");
+    if (!f_ingame) f_ingame = env->GetFieldID(mcCls, "field_71456_v", "Lnet/minecraft/client/gui/GuiIngame;");
+	
+    if (!f_ingame) { env->DeleteLocalRef(mcObj); return false; }
+
+    jobject ingame = env->GetObjectField(mcObj, f_ingame);
+    if (!ingame) { env->DeleteLocalRef(mcObj); return false; }
+
 	// get chat gui
 	jclass igCls = lc->GetClass("net.minecraft.client.gui.GuiIngame");
-	jmethodID getChatGUI = lc->env->GetMethodID(igCls, "getChatGUI", "()Lnet/minecraft/client/gui/GuiNewChat;");
-	jobject chatGui = lc->env->CallObjectMethod(ingame, getChatGUI);
-	jclass cctCls = lc->GetClass("net.minecraft.util.ChatComponentText");
-	jmethodID cctCtor = lc->env->GetMethodID(cctCls, "<init>", "(Ljava/lang/String;)V");
-	jstring jtext = lc->env->NewStringUTF(text.c_str());
-	jobject component = lc->env->NewObject(cctCls, cctCtor, jtext);
-	jclass gncCls = lc->GetClass("net.minecraft.client.gui.GuiNewChat");
-	jmethodID print = lc->env->GetMethodID(gncCls, "printChatMessage", "(Lnet/minecraft/util/IChatComponent;)V");
+    if (!igCls) { env->DeleteLocalRef(ingame); env->DeleteLocalRef(mcObj); return false; }
 
-	lc->env->CallVoidMethod(chatGui, print, component);
-	lc->env->DeleteLocalRef(jtext);
-	lc->env->DeleteLocalRef(component);
-	lc->env->DeleteLocalRef(chatGui);
-	lc->env->DeleteLocalRef(ingame);
-	lc->env->DeleteLocalRef(mcObj);
+	jmethodID getChatGUI = env->GetMethodID(igCls, "getChatGUI", "()Lnet/minecraft/client/gui/GuiNewChat;");
+    if (!getChatGUI) getChatGUI = env->GetMethodID(igCls, "func_146158_b", "()Lnet/minecraft/client/gui/GuiNewChat;");
+
+	if (!getChatGUI) { env->DeleteLocalRef(ingame); env->DeleteLocalRef(mcObj); return false; }
+
+    jobject chatGui = env->CallObjectMethod(ingame, getChatGUI);
+    if (!chatGui) { env->DeleteLocalRef(ingame); env->DeleteLocalRef(mcObj); return false; }
+
+	jclass cctCls = lc->GetClass("net.minecraft.util.ChatComponentText");
+	jmethodID cctCtor = env->GetMethodID(cctCls, "<init>", "(Ljava/lang/String;)V");
+	jstring jtext = env->NewStringUTF(text.c_str());
+	jobject component = env->NewObject(cctCls, cctCtor, jtext);
+
+	jclass gncCls = lc->GetClass("net.minecraft.client.gui.GuiNewChat");
+	jmethodID print = env->GetMethodID(gncCls, "printChatMessage", "(Lnet/minecraft/util/IChatComponent;)V");
+    if (!print) print = env->GetMethodID(gncCls, "func_146227_a", "(Lnet/minecraft/util/IChatComponent;)V");
+
+    if (print) {
+	    env->CallVoidMethod(chatGui, print, component);
+    }
+
+	env->DeleteLocalRef(jtext);
+	env->DeleteLocalRef(component);
+	env->DeleteLocalRef(chatGui);
+	env->DeleteLocalRef(ingame);
+	env->DeleteLocalRef(mcObj);
 	return true;
 }
 

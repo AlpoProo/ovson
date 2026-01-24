@@ -25,5 +25,86 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 
 IDR_MINHOOK_DLL         MINHOOK_DLL             "MinHook\\MinHook.x64.dll"
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Block Textures
+//
+
+// Wool
+IDR_WOOL_WHITE      RCDATA "assets\\blocks\\wool_white.png"
+IDR_WOOL_ORANGE     RCDATA "assets\\blocks\\wool_orange.png"
+IDR_WOOL_MAGENTA    RCDATA "assets\\blocks\\wool_magenta.png"
+IDR_WOOL_LIGHTBLUE  RCDATA "assets\\blocks\\wool_lightblue.png"
+IDR_WOOL_YELLOW     RCDATA "assets\\blocks\\wool_yellow.png"
+IDR_WOOL_LIME       RCDATA "assets\\blocks\\wool_lime.png"
+IDR_WOOL_PINK       RCDATA "assets\\blocks\\wool_pink.png"
+IDR_WOOL_GRAY       RCDATA "assets\\blocks\\wool_gray.png"
+IDR_WOOL_SILVER     RCDATA "assets\\blocks\\wool_silver.png"
+IDR_WOOL_CYAN       RCDATA "assets\\blocks\\wool_cyan.png"
+IDR_WOOL_PURPLE     RCDATA "assets\\blocks\\wool_purple.png"
+IDR_WOOL_BLUE       RCDATA "assets\\blocks\\wool_blue.png"
+IDR_WOOL_BROWN      RCDATA "assets\\blocks\\wool_brown.png"
+IDR_WOOL_GREEN      RCDATA "assets\\blocks\\wool_green.png"
+IDR_WOOL_RED        RCDATA "assets\\blocks\\wool_red.png"
+IDR_WOOL_BLACK      RCDATA "assets\\blocks\\wool_black.png"
+
+// Stained Glass
+IDR_GLASS_WHITE     RCDATA "assets\\blocks\\glass_white.png"
+IDR_GLASS_ORANGE    RCDATA "assets\\blocks\\glass_orange.png"
+IDR_GLASS_MAGENTA   RCDATA "assets\\blocks\\glass_magenta.png"
+IDR_GLASS_LIGHTBLUE RCDATA "assets\\blocks\\glass_lightblue.png"
+IDR_GLASS_YELLOW    RCDATA "assets\\blocks\\glass_yellow.png"
+IDR_GLASS_LIME      RCDATA "assets\\blocks\\glass_lime.png"
+IDR_GLASS_PINK      RCDATA "assets\\blocks\\glass_pink.png"
+IDR_GLASS_GRAY      RCDATA "assets\\blocks\\glass_gray.png"
+IDR_GLASS_SILVER    RCDATA "assets\\blocks\\glass_silver.png"
+IDR_GLASS_CYAN      RCDATA "assets\\blocks\\glass_cyan.png"
+IDR_GLASS_PURPLE    RCDATA "assets\\blocks\\glass_purple.png"
+IDR_GLASS_BLUE      RCDATA "assets\\blocks\\glass_blue.png"
+IDR_GLASS_BROWN     RCDATA "assets\\blocks\\glass_brown.png"
+IDR_GLASS_GREEN     RCDATA "assets\\blocks\\glass_green.png"
+IDR_GLASS_RED       RCDATA "assets\\blocks\\glass_red.png"
+IDR_GLASS_BLACK     RCDATA "assets\\blocks\\glass_black.png"
+IDR_GLASS           RCDATA "assets\\blocks\\glass.png"
+
+// Planks
+IDR_PLANKS_OAK      RCDATA "assets\\blocks\\planks_oak.png"
+IDR_PLANKS_SPRUCE   RCDATA "assets\\blocks\\planks_spruce.png"
+IDR_PLANKS_BIRCH    RCDATA "assets\\blocks\\planks_birch.png"
+IDR_PLANKS_JUNGLE   RCDATA "assets\\blocks\\planks_jungle.png"
+IDR_PLANKS_ACACIA   RCDATA "assets\\blocks\\planks_acacia.png"
+IDR_PLANKS_DARKOAK  RCDATA "assets\\blocks\\planks_darkoak.png"
+
+// Logs
+IDR_LOG_OAK         RCDATA "assets\\blocks\\log_oak.png"
+IDR_LOG_SPRUCE      RCDATA "assets\\blocks\\log_spruce.png"
+IDR_LOG_BIRCH       RCDATA "assets\\blocks\\log_birch.png"
+IDR_LOG_JUNGLE      RCDATA "assets\\blocks\\log_jungle.png"
+IDR_LOG_ACACIA      RCDATA "assets\\blocks\\log_acacia.png"
+IDR_LOG_DARKOAK     RCDATA "assets\\blocks\\log_darkoak.png"
+
+// Special
+IDR_OBSIDIAN        RCDATA "assets\\blocks\\obsidian.png"
+IDR_END_STONE       RCDATA "assets\\blocks\\end_stone.png"
+IDR_TERRACOTTA      RCDATA "assets\\blocks\\hardened_clay.png"
+
+// Terracotta
+IDR_TERRACOTTA_WHITE     RCDATA "assets\\blocks\\clay_white.png"
+IDR_TERRACOTTA_ORANGE    RCDATA "assets\\blocks\\clay_orange.png"
+IDR_TERRACOTTA_MAGENTA   RCDATA "assets\\blocks\\clay_magenta.png"
+IDR_TERRACOTTA_LIGHTBLUE RCDATA "assets\\blocks\\clay_lightblue.png"
+IDR_TERRACOTTA_YELLOW    RCDATA "assets\\blocks\\clay_yellow.png"
+IDR_TERRACOTTA_LIME      RCDATA "assets\\blocks\\clay_lime.png"
+IDR_TERRACOTTA_PINK      RCDATA "assets\\blocks\\clay_pink.png"
+IDR_TERRACOTTA_GRAY      RCDATA "assets\\blocks\\clay_gray.png"
+IDR_TERRACOTTA_SILVER    RCDATA "assets\\blocks\\clay_silver.png"
+IDR_TERRACOTTA_CYAN      RCDATA "assets\\blocks\\clay_cyan.png"
+IDR_TERRACOTTA_PURPLE    RCDATA "assets\\blocks\\clay_purple.png"
+IDR_TERRACOTTA_BLUE      RCDATA "assets\\blocks\\clay_blue.png"
+IDR_TERRACOTTA_BROWN     RCDATA "assets\\blocks\\clay_brown.png"
+IDR_TERRACOTTA_GREEN     RCDATA "assets\\blocks\\clay_green.png"
+IDR_TERRACOTTA_RED       RCDATA "assets\\blocks\\clay_red.png"
+IDR_TERRACOTTA_BLACK     RCDATA "assets\\blocks\\clay_black.png"
+
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////

@@ -18,6 +18,7 @@
 #include "Chat/Commands.h"
 #include "Config/Config.h"
 #include "Render/RenderHook.h"
+#include "Render/TextureLoader.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -44,15 +45,13 @@ void init(void* instance) {
         return;
     }
     
-    jint res = lc->vm->GetEnv((void**)&lc->env, JNI_VERSION_1_8);
-    if (res == JNI_EDETACHED) res = lc->vm->AttachCurrentThread((void**)&lc->env, nullptr);
-
-    if (lc->env != nullptr) {
+    if (lc->getEnv() != nullptr) {
         Logger::initialize();
         Logger::info("OVson initialized");
 
         lc->GetLoadedClasses();
         Config::initialize(static_cast<HMODULE>(instance));
+        BedDefense::TextureLoader::setModule(static_cast<HMODULE>(instance));
         RegisterDefaultCommands();
         ChatInterceptor::initialize();
         Logger::info("ChatHook disabled (safe mode)");
@@ -74,7 +73,6 @@ void init(void* instance) {
             }
         }
 
-        // Wait 1 second before installing RenderHook to avoid DllMain issues
         Sleep(1000);
         Logger::info("Installing RenderHook after delay...");
         try {
@@ -92,20 +90,18 @@ void init(void* instance) {
             SHORT endState = GetAsyncKeyState(VK_END);
             bool isEndDown = (endState & 0x8000) != 0;
             if (!wasEndDown && isEndDown) {
-                // End tuşuna basıldığında hemen "quitting" mesajı göster
                 ChatSDK::showClientMessage(ChatSDK::formatPrefix() + std::string("quitting..."));
                 break;
             }
             wasEndDown = isEndDown;
             ChatInterceptor::poll();
-            RenderHook::poll(); // Render overlay
+            RenderHook::poll();
             Sleep(5);
         }
     }
 
-    // Uninstall hooks safely before exiting
     RenderHook::uninstall();
-    Sleep(200); // Give it a moment to settle
+    Sleep(200);
 
     ChatInterceptor::shutdown();
     Logger::shutdown();

@@ -6,7 +6,6 @@
 class CommandRegistry {
 public:
 	using CommandHandler = std::function<void(const std::string& args)>;
-
 	static CommandRegistry& instance();
 	void registerCommand(const std::string& name, CommandHandler handler);
 	bool tryDispatch(const std::string& message);
