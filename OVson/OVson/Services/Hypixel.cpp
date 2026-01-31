@@ -95,6 +95,7 @@ std::optional<Hypixel::PlayerStats> Hypixel::getPlayerStats(const std::string &a
             findJsonInt(bwJson, "final_deaths_bedwars", fd);
             findJsonInt(bwJson, "wins_bedwars", wins);
             findJsonInt(bwJson, "losses_bedwars", losses);
+            findJsonInt(bwJson, "winstreak", ps.winstreak);
             
             ps.bedwarsFinalKills = fk;
             ps.bedwarsFinalDeaths = fd;

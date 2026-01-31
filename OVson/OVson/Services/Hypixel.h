@@ -12,6 +12,7 @@ namespace Hypixel {
 		int bedwarsFinalDeaths = 0;
 		int bedwarsWins = 0;
 		int bedwarsLosses = 0;
+		int winstreak = 0;
 		std::string teamColor;
 		bool isNicked = false;
 	};
