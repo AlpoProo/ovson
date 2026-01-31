@@ -63,6 +63,23 @@ namespace Render {
     static bool s_dragging = false;
     static float s_dragOffsetX = 0.0f;
     static float s_dragOffsetY = 0.0f;
+    static bool s_waitingForKey = false;
+
+    std::string ClickGUI::getKeyName(int vk) {
+        if (vk == VK_INSERT) return "INSERT";
+        if (vk == VK_DELETE) return "DELETE";
+        if (vk == VK_HOME) return "HOME";
+        if (vk == VK_END) return "END";
+        if (vk == VK_PRIOR) return "PAGE UP";
+        if (vk == VK_NEXT) return "PAGE DOWN";
+        if (vk == VK_RSHIFT) return "RSHIFT";
+        if (vk == VK_LSHIFT) return "LSHIFT";
+        
+        UINT scanCode = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
+        char buf[32] = {0};
+        if (GetKeyNameTextA(scanCode << 16, buf, 32)) return std::string(buf);
+        return "Key " + std::to_string(vk);
+    }
 
     #define THEME_NAVY Config::getThemeColor()
     const DWORD THEME_BG = 0xFF0C0C0E;
@@ -185,7 +202,8 @@ namespace Render {
     }
 
     void ClickGUI::updateInput(HWND hwnd) {
-        bool down = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
+        int key = Config::getClickGuiKey();
+        bool down = (GetAsyncKeyState(key) & 0x8000) != 0;
         if (down && !s_lastInsert) {
              if (Config::isClickGuiOn()) {
                   toggle();
@@ -410,6 +428,23 @@ namespace Render {
                  }
              } else {
                  s_dragging = false;
+             }
+        }
+        
+        if (s_open && s_waitingForKey) {
+             for (int k = 1; k < 255; ++k) {
+                 if (k == VK_LBUTTON || k == VK_RBUTTON || k == VK_MBUTTON) continue; 
+                 if ((GetAsyncKeyState(k) & 0x8000) != 0) {
+                     if (k == VK_ESCAPE) {
+                         s_waitingForKey = false;
+                     } else {
+                         Config::setClickGuiKey(k);
+                         Config::save();
+                         NotificationManager::getInstance()->add("Settings", "Bind set to " + getKeyName(k), NotificationType::Success);
+                         s_waitingForKey = false;
+                     }
+                     break; 
+                 }
              }
         }
         
@@ -944,6 +979,24 @@ namespace Render {
                   Config::save();
                   NotificationManager::getInstance()->add("Cloud", "Settings synchronized successfully!", NotificationType::Success);
               }
+              cy += 50;
+
+              g_guiFont.drawString(cx, cy, "Menu Toggle Key", applyAlpha(0xFFFFFFFF, alpha));
+              cy += 25;
+              
+              std::string keyText = s_waitingForKey ? "Press any key... (ESC to cancel)" : ("Current: " + getKeyName(Config::getClickGuiKey()));
+              if (s_waitingForKey && (GetTickCount64() / 300) % 2 == 0) keyText = "> " + keyText + " <";
+
+              bool hBind = isHovered(mx, my, cx, cy, 250, 35);
+              glDisable(GL_TEXTURE_2D);
+              drawRect(cx, cy, 250, 35, s_waitingForKey ? THEME_NAVY : (hBind ? 0xFF35353A : THEME_CARD), alpha);
+              glEnable(GL_TEXTURE_2D);
+              g_guiFont.drawString(cx + 20, cy + 10, keyText, applyAlpha(s_waitingForKey ? 0xFFFFFFFF : 0xFFA0A0A5, alpha));
+              
+              if (clickEvent && hBind && !s_waitingForKey) {
+                  s_waitingForKey = true;
+                  s_typingApiKey = s_typingSearch = false; // clear others
+              }
               cy += 70;
 
               g_guiFont.drawString(cx, cy, "Accent Color", applyAlpha(0xFFFFFFFF, alpha));
@@ -1063,5 +1116,3 @@ namespace Render {
         glPopMatrix();
     }
 }
-
-
