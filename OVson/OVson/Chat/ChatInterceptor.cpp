@@ -56,12 +56,15 @@ static int g_mode = 0; // 0 bedwars, 1 skywars, 2 duels
 static ULONGLONG g_bootstrapStartTick = 0;
 static std::unordered_map<std::string, int> g_teamProbeTries;
 static std::unordered_set<std::string> g_processedPlayers;
-static std::queue<std::string> g_fetchQueue;
-static std::unordered_set<std::string> g_queuedPlayers;
+// static std::queue<std::string> g_fetchQueue; // Removed
+static std::unordered_set<std::string> g_queuedPlayers; // kept for logic tracking but might be redundant with activeFetches
 static std::mutex g_queueMutex;
-static std::condition_variable g_queueCV;
-static std::vector<std::thread> g_workers;
-static std::atomic<bool> g_stopWorkers{false};
+// static std::condition_variable g_queueCV; // Removed
+// static std::vector<std::thread> g_workers; // Removed
+// static std::atomic<bool> g_stopWorkers{false}; // Removed
+
+static std::unordered_set<std::string> g_activeFetches;
+static std::mutex g_activeFetchesMutex;
 static bool g_inHypixelGame = false;
 static std::unordered_map<std::string, Hypixel::PlayerStats> g_pendingStatsMap;
 static std::mutex g_pendingStatsMutex;
@@ -1292,7 +1295,10 @@ static void resetGameCache()
     {
         std::lock_guard<std::mutex> qlock(g_queueMutex);
         g_queuedPlayers.clear();
-        while (!g_fetchQueue.empty()) g_fetchQueue.pop();
+    }
+    {
+        std::lock_guard<std::mutex> aLock(g_activeFetchesMutex);
+        g_activeFetches.clear();
     }
     g_lastResetTick = GetTickCount64();
     Logger::log(Config::DebugCategory::GameDetection, "Game cache reset performed");
@@ -1411,102 +1417,90 @@ static void tailLogOnce()
     }
 }
 
-static void fetchWorker()
+static void fetchWorker(std::string name)
 {
-    while (!g_stopWorkers)
+    const std::string apiKey = Config::getApiKey();
+    if (!apiKey.empty())
     {
-        std::string name;
-        {
-            std::unique_lock<std::mutex> lock(g_queueMutex);
-            g_queueCV.wait(lock, [] { return !g_fetchQueue.empty() || g_stopWorkers; });
-            if (g_stopWorkers && g_fetchQueue.empty()) return;
-            name = g_fetchQueue.front();
-            g_fetchQueue.pop();
-        }
+        bool cacheFound = false;
+        Hypixel::PlayerStats cachedData;
+        ULONGLONG now = GetTickCount64();
 
-        const std::string apiKey = Config::getApiKey();
-        if (!apiKey.empty())
         {
-            bool cacheFound = false;
-            Hypixel::PlayerStats cachedData;
-            ULONGLONG now = GetTickCount64();
-
-            {
-                std::lock_guard<std::mutex> lock(g_cacheMutex);
-                auto it = g_persistentStatsCache.find(name);
-                if (it != g_persistentStatsCache.end()) {
-                    if (now - it->second.timestamp < 600000) {
-                        cachedData = it->second.stats;
-                        cacheFound = true;
-                    }
+            std::lock_guard<std::mutex> lock(g_cacheMutex);
+            auto it = g_persistentStatsCache.find(name);
+            if (it != g_persistentStatsCache.end()) {
+                if (now - it->second.timestamp < 600000) {
+                    cachedData = it->second.stats;
+                    cacheFound = true;
                 }
             }
+        }
 
-            if (cacheFound) {
-                std::lock_guard<std::mutex> lock(g_pendingStatsMutex);
-                g_pendingStatsMap[name] = cachedData;
-            } else {
-                bool fetchError = false;
-                auto uuid = Hypixel::getUuidByName(name);
-                if (uuid)
+        if (cacheFound) {
+            std::lock_guard<std::mutex> lock(g_pendingStatsMutex);
+            g_pendingStatsMap[name] = cachedData;
+        } else {
+            bool fetchError = false;
+            auto uuid = Hypixel::getUuidByName(name);
+            if (uuid)
+            {
+                auto stats = Hypixel::getPlayerStats(apiKey, *uuid);
+                if (stats)
                 {
-                    auto stats = Hypixel::getPlayerStats(apiKey, *uuid);
-                    if (stats)
                     {
-                        {
-                            std::lock_guard<std::mutex> lock(g_cacheMutex);
-                            g_persistentStatsCache[name] = { *stats, now };
-                        }
-                        std::lock_guard<std::mutex> lock(g_pendingStatsMutex);
-                        g_pendingStatsMap[name] = *stats;
+                        std::lock_guard<std::mutex> lock(g_cacheMutex);
+                        g_persistentStatsCache[name] = { *stats, now };
                     }
-                    else
-                    {
-                        fetchError = true;
-                    }
+                    std::lock_guard<std::mutex> lock(g_pendingStatsMutex);
+                    g_pendingStatsMap[name] = *stats;
                 }
                 else
                 {
                     fetchError = true;
                 }
+            }
+            else
+            {
+                fetchError = true;
+            }
 
-                if (fetchError)
+            if (fetchError)
+            {
+                std::lock_guard<std::mutex> lock(g_retryMutex);
+                int count = ++g_playerFetchRetries[name];
+                if (count < 5)
                 {
-                    std::lock_guard<std::mutex> lock(g_retryMutex);
-                    int count = ++g_playerFetchRetries[name];
-                    if (count < 5)
-                    {
-                        g_retryUntil[name] = now + 2000;
-                    }
-                    else
-                    {
-                        Hypixel::PlayerStats nickedStats;
-                        nickedStats.isNicked = true;
-                        {
-                            std::lock_guard<std::mutex> lock(g_pendingStatsMutex);
-                            g_pendingStatsMap[name] = nickedStats;
-                        }
-                        // cache
-                        {
-                            std::lock_guard<std::mutex> lock(g_cacheMutex);
-                            g_persistentStatsCache[name] = { nickedStats, now };
-                        }
-                        fetchError = false;
-                    }
+                    g_retryUntil[name] = now + 2000;
                 }
-
-                if (!fetchError)
+                else
                 {
-                    std::lock_guard<std::mutex> lock(g_queueMutex);
-                    g_processedPlayers.insert(name);
+                    Hypixel::PlayerStats nickedStats;
+                    nickedStats.isNicked = true;
+                    {
+                        std::lock_guard<std::mutex> lock(g_pendingStatsMutex);
+                        g_pendingStatsMap[name] = nickedStats;
+                    }
+                    // cache
+                    {
+                        std::lock_guard<std::mutex> lock(g_cacheMutex);
+                        g_persistentStatsCache[name] = { nickedStats, now };
+                    }
+                    fetchError = false;
                 }
             }
-        }
 
-        {
-            std::lock_guard<std::mutex> lock(g_queueMutex);
-            g_queuedPlayers.erase(name);
+            if (!fetchError)
+            {
+                std::lock_guard<std::mutex> lock(g_queueMutex);
+                g_processedPlayers.insert(name);
+            }
         }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_activeFetchesMutex);
+        g_activeFetches.erase(name);
     }
 }
 
@@ -1514,22 +1508,10 @@ void ChatInterceptor::initialize()
 {
     g_initialized = true;
     g_bootstrapStartTick = (ULONGLONG)GetTickCount();
-    g_stopWorkers = false;
-    for (int i = 0; i < 4; ++i)
-    {
-        g_workers.emplace_back(fetchWorker);
-    }
 }
 
 void ChatInterceptor::shutdown()
 {
-    g_stopWorkers = true;
-    g_queueCV.notify_all();
-    for (auto &t : g_workers)
-    {
-        if (t.joinable()) t.join();
-    }
-    g_workers.clear();
     g_initialized = false;
 }
 
@@ -1550,19 +1532,19 @@ static void queuePlayersForFetching()
 
     std::lock_guard<std::mutex> qLock(g_queueMutex);
     std::lock_guard<std::mutex> rLock(g_retryMutex);
+    std::lock_guard<std::mutex> aLock(g_activeFetchesMutex);
 
     for (const auto &name : g_onlinePlayers)
     {
         if (g_processedPlayers.find(name) != g_processedPlayers.end()) continue;
         
-        if (g_queuedPlayers.find(name) != g_queuedPlayers.end()) continue;
+        if (g_activeFetches.find(name) != g_activeFetches.end()) continue;
         
         auto it = g_retryUntil.find(name);
         if (it != g_retryUntil.end() && now < it->second) continue;
 
-        g_fetchQueue.push(name);
-        g_queuedPlayers.insert(name);
-        g_queueCV.notify_one();
+        g_activeFetches.insert(name);
+        std::thread(fetchWorker, name).detach();
     }
 }
 
