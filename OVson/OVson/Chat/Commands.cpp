@@ -4,6 +4,7 @@
 #include "../Config/Config.h"
 #include "ChatInterceptor.h"
 #include "../Services/Hypixel.h"
+#include "../Render/ClickGUI.h"
 #include "../Logic/BedDefense/BedDefenseManager.h"
 #include <sstream>
 #include <iomanip>
@@ -241,12 +242,14 @@ namespace
 		while (!a.empty() && a.front() == ' ') a.erase(a.begin());
 		if (a == "on") {
 			Config::setClickGuiOn(true);
-			ChatSDK::showPrefixed("§aClickGUI: §fEnabled (INSERT will open menu)");
+			std::string key = Render::ClickGUI::getKeyName(Config::getClickGuiKey());
+			ChatSDK::showPrefixed("§aClickGUI: §fEnabled (" + key + " will open menu)");
 			return;
 		}
 		if (a == "off") {
 			Config::setClickGuiOn(false);
-			ChatSDK::showPrefixed("§cClickGUI: §fDisabled (INSERT will open overlay)");
+			std::string key = Render::ClickGUI::getKeyName(Config::getClickGuiKey());
+			ChatSDK::showPrefixed("§cClickGUI: §fDisabled (" + key + " will open overlay)");
 			return;
 		}
 		ChatSDK::showPrefixed("usage: .clickgui on|off");
