@@ -2,6 +2,7 @@
 #include "../Net/Http.h"
 #include "../Config/Config.h"
 #include "../Chat/ChatSDK.h"
+#include "../Render/NotificationManager.h"
 #include <unordered_map>
 #include <mutex>
 #include <chrono>
@@ -53,7 +54,7 @@ namespace Seraph {
 
     std::optional<PlayerTags> getPlayerTags(const std::string& username, const std::string& uuid) {
         if (!Config::isTagsEnabled()) return std::nullopt;
-        if (Config::getActiveTagService() != "Seraph") return std::nullopt;
+        if (Config::getActiveTagService() != "Seraph" && Config::getActiveTagService() != "Both") return std::nullopt;
         if (uuid.empty()) return std::nullopt;
 
         auto now = std::chrono::steady_clock::now();
@@ -123,6 +124,13 @@ namespace Seraph {
                 std::lock_guard<std::mutex> lock(g_cacheMutex);
                 pruneCacheLocked();
                 g_cache[uuid] = { result, std::chrono::steady_clock::now() };
+            }
+
+            if (!result.tags.empty()) {
+                std::string type = result.tags[0].type;
+                std::string alert = ChatSDK::formatPrefix() + "\xC2\xA7" "4SERAPH ALERT: \xC2\xA7" "f" + username + " is blacklisted: \xC2\xA7" "l" + type + "\xC2\xA7" "r!";
+                ChatSDK::showClientMessage(alert);
+                Render::NotificationManager::getInstance()->add("Seraph Alert", username + " is blacklisted (" + type + ")", Render::NotificationType::Error);
             }
 
             {

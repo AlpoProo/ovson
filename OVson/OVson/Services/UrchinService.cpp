@@ -2,6 +2,8 @@
 #include "../Net/Http.h"
 #include "../Config/Config.h"
 #include "../Utils/Logger.h"
+#include "../Chat/ChatSDK.h"
+#include "../Render/NotificationManager.h"
 #include <unordered_map>
 #include <mutex>
 #include <chrono>
@@ -93,7 +95,8 @@ namespace Urchin {
     static std::mutex g_pendingMutex;
 
     std::optional<PlayerTags> getPlayerTags(const std::string& username) {
-        if (!Config::isUrchinEnabled()) return std::nullopt;
+        if (!Config::isTagsEnabled()) return std::nullopt;
+        if (Config::getActiveTagService() != "Urchin" && Config::getActiveTagService() != "Both") return std::nullopt;
 
         auto now = std::chrono::steady_clock::now();
 
@@ -162,6 +165,19 @@ namespace Urchin {
             
             if (success) {
                 Logger::log(Config::DebugCategory::Urchin, ">>> Urchin Success: %s Found %d tags <<<", username.c_str(), (int)result.tags.size());
+                
+                if (!result.tags.empty()) {
+                    for (const auto& t : result.tags) {
+                        std::string type = t.type;
+                        for (auto& c : type) c = toupper(c);
+                        if (type.find("BLATANT") != std::string::npos || type.find("SNIPER") != std::string::npos || type.find("CHEATER") != std::string::npos) {
+                            std::string alert = ChatSDK::formatPrefix() + "\xC2\xA7" "cALERT: \xC2\xA7" "f" + username + " is tagged as \xC2\xA7" "l" + t.type + "\xC2\xA7" "r!";
+                            ChatSDK::showClientMessage(alert);
+                            Render::NotificationManager::getInstance()->add("Urchin Alert", username + " is a " + t.type, Render::NotificationType::Warning);
+                            break;
+                        }
+                    }
+                }
             } else {
                 Logger::log(Config::DebugCategory::Urchin, "!!! Urchin Failed: %s - Reason: %s !!!", username.c_str(), failReason.c_str());
             }

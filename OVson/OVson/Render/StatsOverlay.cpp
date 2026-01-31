@@ -481,6 +481,40 @@ void StatsOverlay::render(void* hdcPtr)
 			
 			if (showTags) {
 				float currentTagX = localX + colTags;
+                std::string activeS = Config::getActiveTagService();
+
+                auto getAbbr = [](const std::string& raw) -> std::string {
+                    std::string t = raw;
+                    for (auto & c: t) c = toupper(c);
+                    if (t.find("BLATANT") != std::string::npos) return "BC";
+                    if (t.find("CLOSET") != std::string::npos) return "CC";
+                    if (t.find("CONFIRMED") != std::string::npos) return "C";
+                    if (t.find("CHEATER") != std::string::npos) return "C";
+                    if (t.find("SNIPER") != std::string::npos) return "S";
+                    return "";
+                };
+
+                auto getHUDAbbr = [](const std::string& raw) -> std::string {
+                    std::string t = raw;
+                    for (auto & c: t) c = toupper(c);
+                    if (t.find("BLATANT") != std::string::npos) return "BC";
+                    if (t.find("CLOSET") != std::string::npos) return "CC";
+                    if (t.find("CONFIRMED") != std::string::npos) return "C";
+                    if (t.find("CHEATER") != std::string::npos) return "C";
+                    if (t.find("SNIPER") != std::string::npos) return "S";
+                    return "";
+                };
+
+                auto drawAbbr = [&](const std::string& rawType, uint32_t color, bool isUrchin) {
+                    std::string abbr = getHUDAbbr(rawType);
+                    if (abbr.empty()) abbr = isUrchin ? "U" : "S";
+                    
+                    std::string braced = "[" + abbr + "]";
+                    g_font.drawString(currentTagX + 1.0f, currentY, braced, color & 0x40FFFFFF);
+                    g_font.drawString(currentTagX, currentY, braced, color);
+                    currentTagX += g_font.getStringWidth(braced) + 5.0f;
+                };
+
                 auto drawTag = [&](const std::string& rawType, uint32_t baseColor) {
                     std::string type = rawType;
                     std::replace(type.begin(), type.end(), '_', ' ');
@@ -490,25 +524,37 @@ void StatsOverlay::render(void* hdcPtr)
                     currentTagX += g_font.getStringWidth(type) + 12.0f;
                 };
 
-				auto urchinTags = Urchin::getPlayerTags(name);
-				if (urchinTags && !urchinTags->tags.empty()) {
-					for (const auto& tag : urchinTags->tags) {
-						uint32_t tagColor = colorFromRGB(255, 255, 255);
-						if (tag.type == "legit_sniper") tagColor = colorFromRGB(255, 165, 0);
-						else if (tag.type == "blatant_cheater") tagColor = colorFromRGB(220, 20, 60);
-						else if (tag.type == "confirmed_cheater") tagColor = colorFromRGB(148, 0, 211);
-                        drawTag(tag.type, tagColor);
-					}
-				}
-                
-                auto seraphTags = Seraph::getPlayerTags(name, stats.uuid);
-                if (seraphTags && !seraphTags->tags.empty()) {
-                    for(const auto& tag : seraphTags->tags) {
-                        drawTag(tag.type, colorFromRGB(255, 85, 85));
+                auto uRes = Urchin::getPlayerTags(name);
+                auto sRes = Seraph::getPlayerTags(name, stats.uuid);
+
+                bool hasU = uRes && !uRes->tags.empty() && (activeS == "Urchin" || activeS == "Both");
+                bool hasS = sRes && !sRes->tags.empty() && (activeS == "Seraph" || activeS == "Both");
+
+                if (hasU && hasS) {
+                    // Abbreviate both
+                    for (const auto& tag : uRes->tags) drawAbbr(tag.type, colorFromRGB(220, 20, 60), true);
+                    for (const auto& tag : sRes->tags) drawAbbr(tag.type, colorFromRGB(255, 85, 85), false);
+                } else {
+                    // Show full if only one
+                    if (hasU) {
+                        for (const auto& tag : uRes->tags) {
+                            uint32_t c = colorFromRGB(255, 255, 255);
+                            std::string t = tag.type; for(auto &cc:t) cc=toupper(cc);
+                            if (t.find("BLATANT") != std::string::npos) c = colorFromRGB(220, 20, 60);
+                            else if (t.find("CONFIRMED") != std::string::npos) c = colorFromRGB(148, 0, 211);
+                            drawTag(tag.type, c);
+                        }
+                    }
+                    if (hasS) {
+                        for (const auto& tag : sRes->tags) {
+                            uint32_t c = colorFromRGB(255, 85, 85);
+                            if (tag.type.find("Confirmed") != std::string::npos) c = colorFromRGB(211, 0, 148); 
+                            drawTag(tag.type, c);
+                        }
                     }
                 }
 
-				if ((!urchinTags || urchinTags->tags.empty()) && (!seraphTags || seraphTags->tags.empty())) {
+				if (!hasU && !hasS) {
 					g_font.drawString(currentTagX, currentY, "-", colorFromRGB(100, 100, 105));
 				}
 			}
