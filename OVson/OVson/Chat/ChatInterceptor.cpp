@@ -1074,28 +1074,37 @@ static void updateTabListStats()
 
                                         // append tags if enabled
                                         if (Config::isTagsEnabled()) {
-                                            auto uTagRes = Urchin::getPlayerTags(name);
-                                            if (uTagRes && !uTagRes->tags.empty()) {
-                                                for (const auto& tag : uTagRes->tags) {
-                                                    if (tag.type == "Blatant Cheater") formatted += " \xC2\xA7" "c[BC]";
-                                                    else if (tag.type == "Sniper") formatted += " \xC2\xA7" "6[S]";
-                                                    else if (tag.type == "Closet Cheater") formatted += " \xC2\xA7" "c[CC]";
-                                                    else if (tag.type == "Legit") formatted += " \xC2\xA7" "a[L]";
-                                                    else if (tag.type == "Media") formatted += " \xC2\xA7" "d[M]";
-                                                    else if (tag.type == "Staff") formatted += " \xC2\xA7" "b[STAFF]";
-                                                    break; 
+                                            std::string activeS = Config::getActiveTagService();
+                                            
+                                            auto getTabAbbr = [](const std::string& raw) -> std::string {
+                                                std::string t = raw;
+                                                for (auto & c: t) c = toupper(c);
+                                                if (t.find("BLATANT") != std::string::npos) return "\xC2\xA7" "c[BC]";
+                                                if (t.find("CLOSET") != std::string::npos) return "\xC2\xA7" "c[CC]";
+                                                if (t.find("CONFIRMED") != std::string::npos) return "\xC2\xA7" "d[C]";
+                                                if (t.find("CHEATER") != std::string::npos) return "\xC2\xA7" "c[C]";
+                                                if (t.find("SNIPER") != std::string::npos) return "\xC2\xA7" "6[S]";
+                                                if (t.find("STAFF") != std::string::npos) return "\xC2\xA7" "b[STAFF]";
+                                                if (t.find("MEDIA") != std::string::npos) return "\xC2\xA7" "d[M]";
+                                                if (t.find("LEGIT") != std::string::npos) return "\xC2\xA7" "a[L]";
+                                                return "";
+                                            };
+
+                                            if (activeS == "Urchin" || activeS == "Both") {
+                                                auto uTagRes = Urchin::getPlayerTags(name);
+                                                if (uTagRes && !uTagRes->tags.empty()) {
+                                                    std::string a = getTabAbbr(uTagRes->tags[0].type);
+                                                    formatted += " " + (a.empty() ? "\xC2\xA7" "c[U]" : a);
                                                 }
                                             }
 
-                                            auto uP = ChatInterceptor::g_playerStatsMap.find(name);
-                                            if (uP != ChatInterceptor::g_playerStatsMap.end() && !uP->second.uuid.empty()) {
-                                                auto sTagRes = Seraph::getPlayerTags(name, uP->second.uuid);
-                                                if (sTagRes && !sTagRes->tags.empty()) {
-                                                    std::string tagType = sTagRes->tags[0].type;
-                                                    if (tagType == "Confirmed Cheater") formatted += " \xC2\xA7" "d[C]";
-                                                    else if (tagType == "Blatant Cheating") formatted += " \xC2\xA7" "c[BC]";
-                                                    else if (tagType == "Closet Cheating") formatted += " \xC2\xA7" "c[CC]";
-                                                    else formatted += " \xC2\xA7" "c[S]";
+                                            if (activeS == "Seraph" || activeS == "Both") {
+                                                if (!stats.uuid.empty()) {
+                                                    auto sTagRes = Seraph::getPlayerTags(name, stats.uuid);
+                                                    if (sTagRes && !sTagRes->tags.empty()) {
+                                                        std::string a = getTabAbbr(sTagRes->tags[0].type);
+                                                        formatted += " " + (a.empty() ? "\xC2\xA7" "c[S]" : a);
+                                                    }
                                                 }
                                             }
                                         }
@@ -1631,24 +1640,24 @@ static void processPendingStats()
 
         if (Config::isTagsEnabled()) {
             std::string activeS = Config::getActiveTagService();
-            if (activeS == "Urchin") {
+            if (activeS == "Urchin" || activeS == "Both") {
                 auto uT = Urchin::getPlayerTags(name);
                 if (uT && !uT->tags.empty()) {
                     for (const auto& t : uT->tags) {
-                        if (t.type == "Blatant Cheater" || t.type == "Sniper") {
-                            std::string alert = ChatSDK::formatPrefix() + "\xC2\xA7" "cALERT: \xC2\xA7" "f" + name + " is tagged as \xC2\xA7" "l" + t.type + "\xC2\xA7" "r!";
-                            ChatSDK::showClientMessage(alert);
+                        std::string type = t.type; for (auto& c : type) c = toupper(c);
+                        if (type.find("BLATANT") != std::string::npos || type.find("SNIPER") != std::string::npos || type.find("CHEATER") != std::string::npos) {
+                            ChatSDK::showClientMessage(ChatSDK::formatPrefix() + "\xC2\xA7" "cALERT: \xC2\xA7" "f" + name + " is tagged as \xC2\xA7" "l" + t.type + "\xC2\xA7" "r!");
                             Render::NotificationManager::getInstance()->add("Urchin Alert", name + " is a " + t.type, Render::NotificationType::Warning);
                             break;
                         }
                     }
                 }
-            } else if (activeS == "Seraph" && !stats.uuid.empty()) {
+            }
+            if ((activeS == "Seraph" || activeS == "Both") && !stats.uuid.empty()) {
                 auto sT = Seraph::getPlayerTags(name, stats.uuid);
                 if (sT && !sT->tags.empty()) {
                     std::string type = sT->tags[0].type;
-                    std::string alert = ChatSDK::formatPrefix() + "\xC2\xA7" "4SERAPH ALERT: \xC2\xA7" "f" + name + " is blacklisted: \xC2\xA7" "l" + type + "\xC2\xA7" "r!";
-                    ChatSDK::showClientMessage(alert);
+                    ChatSDK::showClientMessage(ChatSDK::formatPrefix() + "\xC2\xA7" "4SERAPH ALERT: \xC2\xA7" "f" + name + " is blacklisted: \xC2\xA7" "l" + type + "\xC2\xA7" "r!");
                     Render::NotificationManager::getInstance()->add("Seraph Alert", name + " is blacklisted (" + type + ")", Render::NotificationType::Error);
                 }
             }
