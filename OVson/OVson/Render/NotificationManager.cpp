@@ -51,6 +51,8 @@ namespace Render {
         n.timer = 0.0f;
         n.slideAnim = 0.0f;
         m_notifications.push_back(n);
+
+        OutputDebugStringA(("[OVson] Notification Added: " + title + " - " + message + "\n").c_str());
     }
 
     static void drawRect(float x, float y, float w, float h, DWORD color, float alphaMult = 1.0f) {

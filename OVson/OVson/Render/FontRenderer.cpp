@@ -162,7 +162,45 @@ void FontRenderer::drawString(float x, float y, const std::string& text, uint32_
 	glBegin(GL_QUADS);
 	for (size_t k = 0; k < text.length(); k++) {
 		unsigned char ch = (unsigned char)text[k];
-		if (ch < 32 || ch > 126) ch = '?';
+        
+        if (ch == 167 || ch == '&') { // 167 is §
+            if (k + 1 < text.length()) {
+                char code = tolower(text[k + 1]);
+                uint32_t newColor = color;
+                bool found = true;
+                if (code == '0') newColor = 0xFF000000;
+                else if (code == '1') newColor = 0xFF0000AA;
+                else if (code == '2') newColor = 0xFF00AA00;
+                else if (code == '3') newColor = 0xFF00AAAA;
+                else if (code == '4') newColor = 0xFFAA0000;
+                else if (code == '5') newColor = 0xFFAA00AA;
+                else if (code == '6') newColor = 0xFFFFAA00;
+                else if (code == '7') newColor = 0xFFAAAAAA;
+                else if (code == '8') newColor = 0xFF555555;
+                else if (code == '9') newColor = 0xFF5555FF;
+                else if (code == 'a') newColor = 0xFF55FF55;
+                else if (code == 'b') newColor = 0xFF55FFFF;
+                else if (code == 'c') newColor = 0xFFFF5555;
+                else if (code == 'd') newColor = 0xFFFF55FF;
+                else if (code == 'e') newColor = 0xFFFFFF55;
+                else if (code == 'f') newColor = 0xFFFFFFFF;
+                else if (code == 'r') newColor = color; // Reset
+                else found = false;
+
+                if (found) {
+                    float nr = ((newColor >> 16) & 0xFF) / 255.0f;
+                    float ng = ((newColor >> 8) & 0xFF) / 255.0f;
+                    float nb = (newColor & 0xFF) / 255.0f;
+                    float na = ((newColor >> 24) & 0xFF) / 255.0f;
+                    if (na == 0.0f) na = a;
+                    glColor4f(nr, ng, nb, na);
+                    k++;
+                    continue;
+                }
+            }
+        }
+
+		if (ch < 32 || ch > 126) continue;
 
 		int i = ch - 32;
 		const int charSize = 64;
@@ -201,8 +239,16 @@ float FontRenderer::getStringWidth(const std::string& text)
 {
 	float w = 0.0f;
 	const float renderScale = 0.5f;
-	for (char c : text) {
-		w += (getCharWidth(c) * renderScale) + (1.0f * renderScale);
+	for (size_t i = 0; i < text.length(); i++) {
+        unsigned char ch = (unsigned char)text[i];
+        if (ch == 167 || ch == '&') {
+            if (i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+        }
+        if (ch < 32 || ch > 126) continue;
+		w += (getCharWidth(ch) * renderScale) + (1.0f * renderScale);
 	}
 	return w;
 }

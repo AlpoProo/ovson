@@ -718,44 +718,25 @@ namespace Render {
                       bool hasUrchin = utags && !utags->tags.empty() && (activeS == "Urchin" || activeS == "Both");
                       bool hasSeraph = stags && !stags->tags.empty() && (activeS == "Seraph" || activeS == "Both");
 
-                      if (hasUrchin && hasSeraph) {
+                      if (hasUrchin) {
                           cy += 40;
-                          g_guiFont.drawString(cx, cy, "Tags Found:", applyAlpha(0xFFA0A0A5, alpha));
+                          g_guiFont.drawString(cx, cy, "Urchin Tags:", applyAlpha(0xFFA0A0A5, alpha));
                           cy += 20;
-                          std::string combined;
-                          std::string uType = utags->tags[0].type;
-                          if (uType == "Blatant Cheater") combined += "\xC2\xA7" "c[BC] ";
-                          else if (uType == "Closet Cheater") combined += "\xC2\xA7" "c[CC] ";
-                          else combined += "\xC2\xA7" "c[U] ";
-
-                          std::string sType = stags->tags[0].type;
-                          if (sType == "Confirmed Cheater") combined += "\xC2\xA7" "d[C] ";
-                          else if (sType == "Blatant Cheating") combined += "\xC2\xA7" "c[BC] ";
-                          else if (sType == "Closet Cheating") combined += "\xC2\xA7" "c[CC] ";
-                          else combined += "\xC2\xA7" "c[S] ";
-
-                          drawWrapped(combined, 0xFFFFFFFF, cy);
-                      } else {
-                          if (hasUrchin) {
-                              cy += 40;
-                              g_guiFont.drawString(cx, cy, "Urchin Tags:", applyAlpha(0xFFA0A0A5, alpha));
-                              cy += 20;
-                              for (const auto& tag : utags->tags) {
-                                  std::string tagText = "[" + tag.type + "]";
-                                  if (!tag.reason.empty()) tagText += " - " + tag.reason;
-                                  drawWrapped(tagText, 0xFFCCCCCC, cy);
-                              }
+                          for (const auto& tag : utags->tags) {
+                              std::string tagText = "[" + tag.type + "]";
+                              if (!tag.reason.empty()) tagText += " - " + tag.reason;
+                              drawWrapped(tagText, 0xFFCCCCCC, cy);
                           }
-                          if (hasSeraph) {
-                              cy += (hasUrchin ? 20 : 40);
-                              g_guiFont.drawString(cx, cy, "Seraph Blacklist:", applyAlpha(0xFFFF5555, alpha));
-                              cy += 20;
-                              for (const auto& tag : stags->tags) {
-                                  std::string tagText = "[" + tag.type + "]";
-                                  if (!tag.reason.empty()) tagText += " - " + tag.reason;
-                                  drawWrapped(tagText, 0xFFCCCCCC, cy);
-                              }
-                          }
+                      }
+                      if (hasSeraph) {
+                          cy += (hasUrchin ? 40 : 40);
+                          g_guiFont.drawString(cx, cy, "Seraph Blacklist:", applyAlpha(0xFFFF5555, alpha));
+                          cy += 20;
+                          for (const auto& tag : stags->tags) {
+                              std::string tagText = "[" + tag.type + "]";
+                              if (!tag.reason.empty()) tagText += " - " + tag.reason;
+                              drawWrapped(tagText, 0xFFCCCCCC, cy);
+                           }
                       }
                   }
               }
@@ -924,7 +905,7 @@ namespace Render {
                                   for(auto& t : sTagsRes->tags) { if(!tS.empty()) tS += ", "; tS += t.type; }
                                   if (tS.length() > 25) tS = tS.substr(0, 22) + "...";
                                   uint32_t sCol = 0xFFFF5555;
-                                  if (tS.find("Confirmed") != std::string::npos) sCol = 0xFFFF55FF; // Purple/Pink
+                                  if (tS.find("Confirmed") != std::string::npos) sCol = 0xFFFF55FF;
                                   g_guiFont.drawString(cx + 420, cy, tS, applyAlpha(sCol, alpha));
                               } else g_guiFont.drawString(cx + 420, cy, "-", applyAlpha(0xFF505055, alpha));
                           } else g_guiFont.drawString(cx + 420, cy, "Disabled", applyAlpha(0xFF505055, alpha));
@@ -1030,7 +1011,7 @@ namespace Render {
               
               if (clickEvent && hBind && !s_waitingForKey) {
                   s_waitingForKey = true;
-                  s_typingApiKey = s_typingSearch = false; // clear others
+                  s_typingApiKey = s_typingSearch = false;
               }
               cy += 70;
 

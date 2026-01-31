@@ -4,6 +4,7 @@
 #include "../Utils/Logger.h"
 #include "../Chat/ChatSDK.h"
 #include "../Render/NotificationManager.h"
+#include "../Chat/ChatInterceptor.h"
 #include <unordered_map>
 #include <mutex>
 #include <chrono>
@@ -166,7 +167,7 @@ namespace Urchin {
             if (success) {
                 Logger::log(Config::DebugCategory::Urchin, ">>> Urchin Success: %s Found %d tags <<<", username.c_str(), (int)result.tags.size());
                 
-                if (!result.tags.empty()) {
+                if (!result.tags.empty() && ChatInterceptor::isInGame(username)) {
                     for (const auto& t : result.tags) {
                         std::string type = t.type;
                         for (auto& c : type) c = toupper(c);

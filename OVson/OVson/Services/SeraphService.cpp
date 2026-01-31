@@ -3,6 +3,7 @@
 #include "../Config/Config.h"
 #include "../Chat/ChatSDK.h"
 #include "../Render/NotificationManager.h"
+#include "../Chat/ChatInterceptor.h"
 #include <unordered_map>
 #include <mutex>
 #include <chrono>
@@ -107,7 +108,6 @@ namespace Seraph {
                         findJsonString(blacklistSection, "report_type", reportType);
                         findJsonString(blacklistSection, "tooltip", tooltip);
                         
-                        // Strip timestamps and author info from tooltip
                         size_t parenPos = tooltip.rfind('(');
                         if (parenPos != std::string::npos && tooltip.find("by", parenPos) != std::string::npos) {
                             tooltip = tooltip.substr(0, parenPos);
@@ -126,7 +126,7 @@ namespace Seraph {
                 g_cache[uuid] = { result, std::chrono::steady_clock::now() };
             }
 
-            if (!result.tags.empty()) {
+            if (!result.tags.empty() && ChatInterceptor::isInGame(username)) {
                 std::string type = result.tags[0].type;
                 std::string alert = ChatSDK::formatPrefix() + "\xC2\xA7" "4SERAPH ALERT: \xC2\xA7" "f" + username + " is blacklisted: \xC2\xA7" "l" + type + "\xC2\xA7" "r!";
                 ChatSDK::showClientMessage(alert);

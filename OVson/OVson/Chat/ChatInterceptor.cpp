@@ -1775,6 +1775,10 @@ void ChatInterceptor::poll()
         }
     }
 
-    env->DeleteLocalRef(screen);
     env->DeleteLocalRef(mcObj);
+}
+
+bool ChatInterceptor::isInGame(const std::string& name) {
+    std::lock_guard<std::mutex> lock(g_statsMutex);
+    return g_playerStatsMap.count(name) > 0;
 }
