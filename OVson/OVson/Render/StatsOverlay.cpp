@@ -100,6 +100,17 @@ static uint32_t colorForWins(int wins)
     return colorFromRGB(170, 0, 170);
 }
 
+static uint32_t colorForWinstreak(int ws)
+{
+    if (ws < 3) return colorFromRGB(170, 170, 170);
+    if (ws < 5) return colorFromRGB(255, 255, 255);
+    if (ws < 10) return colorFromRGB(255, 170, 0);
+    if (ws < 20) return colorFromRGB(85, 255, 255);
+    if (ws < 50) return colorFromRGB(85, 255, 85);
+    if (ws < 100) return colorFromRGB(170, 0, 170);
+    return colorFromRGB(255, 85, 85); 
+}
+
 static uint32_t colorForFinalKills(int fk)
 {
     if (fk < 1000) return colorFromRGB(170, 170, 170);
@@ -321,7 +332,7 @@ void StatsOverlay::render(void* hdcPtr)
 	}
 
 	bool showTags = Config::isTagsEnabled();
-	float panelWidth = showTags ? 720.0f : 560.0f;
+	float panelWidth = showTags ? 800.0f : 640.0f;
 	float rowHeight = 28.0f;
 	float headerHeight = 32.0f;
 	float panelHeight = headerHeight + (statsData.size() * rowHeight) + 10.0f; 
@@ -333,6 +344,7 @@ void StatsOverlay::render(void* hdcPtr)
 	float colFKDR   = showTags ? 480.0f : 325.0f;
 	float colWins   = showTags ? 570.0f : 415.0f;
 	float colWLR    = showTags ? 650.0f : 495.0f;
+	float colWS     = showTags ? 730.0f : 575.0f;
 
 	if (!s_isDragging && s_panelX < 0) { 
 		s_panelX = (screenWidth - panelWidth) / 2.0f;
@@ -449,6 +461,7 @@ void StatsOverlay::render(void* hdcPtr)
 		g_font.drawString(localX + colFKDR,   headerTextY, "FKDR", colorFromRGB(255, 255, 255));
 		g_font.drawString(localX + colWins,   headerTextY, "WINS", colorFromRGB(255, 255, 255));
 		g_font.drawString(localX + colWLR,    headerTextY, "WLR", colorFromRGB(255, 255, 255));
+		g_font.drawString(localX + colWS,     headerTextY, "WS", colorFromRGB(255, 255, 255));
 
 		float currentY = localY + headerHeight + 5.0f;
 		for (const auto& pair : statsData) {
@@ -509,6 +522,7 @@ void StatsOverlay::render(void* hdcPtr)
 				g_font.drawString(localX + colFKDR,   currentY, fkdrSs.str(), colorForFKDR(fkdr));
 				g_font.drawString(localX + colWins,   currentY, std::to_string(stats.bedwarsWins), colorForWins(stats.bedwarsWins));
 				g_font.drawString(localX + colWLR,    currentY, wlrSs.str(), colorForWLR(wlr));
+				g_font.drawString(localX + colWS,     currentY, std::to_string(stats.winstreak), colorForWinstreak(stats.winstreak));
 			}
 
 			currentY += rowHeight;
