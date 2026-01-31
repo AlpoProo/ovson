@@ -696,6 +696,7 @@ namespace Render {
                   g_guiFont.drawString(cx, cy, "Star: " + std::to_string(s_lookupResult.bedwarsStar), applyAlpha(0xFFFFFFFF, alpha));
                   g_guiFont.drawString(cx + 100, cy, "Wins: " + std::to_string(s_lookupResult.bedwarsWins), applyAlpha(0xFFFFFFFF, alpha));
                   g_guiFont.drawString(cx, cy + 20, "FKDR: " + std::to_string((s_lookupResult.bedwarsFinalDeaths == 0) ? s_lookupResult.bedwarsFinalKills : (double)s_lookupResult.bedwarsFinalKills / s_lookupResult.bedwarsFinalDeaths), applyAlpha(0xFFFFFFFF, alpha));
+                  cy += 40;
                   
                   auto drawWrapped = [&](const std::string& text, uint32_t color, float& currY) {
                       std::string line; std::string word; std::stringstream ss(text);
@@ -832,9 +833,12 @@ namespace Render {
                   g_guiFont.drawString(cx + 10, cy + 10, dispSeraphKey, applyAlpha(0xFFFFFFFF, alpha));
                   if (clickEvent && isHovered(mx, my, cx, cy, 350, 35)) {
                       s_typingSeraphKey = true; s_typingUrchinKey = s_typingSearch = s_typingApiKey = s_typingAutoGG = false;
-                      s_seraphKeyInput = Config::getSeraphApiKey();
-                  } else if (clickEvent && s_typingSeraphKey) {
-                      Config::setSeraphApiKey(s_seraphKeyInput);
+                      NotificationManager::getInstance()->add("Input", "Seraph Key focused", NotificationType::Info);
+                  } else if (clickEvent) {
+                      if (s_typingSeraphKey) {
+                          Config::setSeraphApiKey(s_seraphKeyInput);
+                          NotificationManager::getInstance()->add("Seraph", "API Key Saved", NotificationType::Success);
+                      }
                       s_typingSeraphKey = false;
                   }
                   cy += 70;
