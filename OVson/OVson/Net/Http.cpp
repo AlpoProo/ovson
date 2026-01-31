@@ -50,6 +50,11 @@ bool Http::get(const std::string &url, std::string &responseBody, const std::str
 	HINTERNET hSession = WinHttpOpen(L"OVson/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
 	if (!hSession)
 		return false;
+
+	// Force TLS 1.2/1.3
+	DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | 0x00000800; // 0x00000800 is TLS 1.3
+	WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+
 	HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
 	if (!hConnect)
 	{
@@ -64,7 +69,7 @@ bool Http::get(const std::string &url, std::string &responseBody, const std::str
 		WinHttpCloseHandle(hSession);
 		return false;
 	}
-	BOOL sent = TRUE;
+
 	if (!headerName.empty())
 	{
 		std::wstring hname(headerName.begin(), headerName.end());
@@ -72,16 +77,21 @@ bool Http::get(const std::string &url, std::string &responseBody, const std::str
 		std::wstring header = hname + L": " + hval + L"\r\n";
 		WinHttpAddRequestHeaders(hRequest, header.c_str(), (DWORD)-1L, WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
 	}
-	sent = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-	if (!sent)
+	
+	DWORD securityFlags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | 
+	                      SECURITY_FLAG_IGNORE_CERT_CN_INVALID | SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
+	WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &securityFlags, sizeof(securityFlags));
+
+	WinHttpSetOption(hRequest, WINHTTP_OPTION_CLIENT_CERT_CONTEXT, WINHTTP_NO_CLIENT_CERT_CONTEXT, 0);
+	
+	if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0))
 	{
 		WinHttpCloseHandle(hRequest);
 		WinHttpCloseHandle(hConnect);
 		WinHttpCloseHandle(hSession);
 		return false;
 	}
-	BOOL ok = WinHttpReceiveResponse(hRequest, NULL);
-	if (!ok)
+	if (!WinHttpReceiveResponse(hRequest, NULL))
 	{
 		WinHttpCloseHandle(hRequest);
 		WinHttpCloseHandle(hConnect);
@@ -91,13 +101,7 @@ bool Http::get(const std::string &url, std::string &responseBody, const std::str
 	DWORD statusCode = 0;
 	DWORD len = sizeof(statusCode);
 	WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &len, WINHTTP_NO_HEADER_INDEX);
-	if (statusCode != 200)
-	{
-		WinHttpCloseHandle(hRequest);
-		WinHttpCloseHandle(hConnect);
-		WinHttpCloseHandle(hSession);
-		return false;
-	}
+	
 	responseBody.clear();
 	for (;;)
 	{
@@ -114,7 +118,8 @@ bool Http::get(const std::string &url, std::string &responseBody, const std::str
 	WinHttpCloseHandle(hRequest);
 	WinHttpCloseHandle(hConnect);
 	WinHttpCloseHandle(hSession);
-	return true;
+	
+	return (statusCode == 200);
 }
 
 bool Http::postJson(const std::string &url, const std::string &jsonBody, std::string &responseBody)
@@ -127,6 +132,11 @@ bool Http::postJson(const std::string &url, const std::string &jsonBody, std::st
 	HINTERNET hSession = WinHttpOpen(L"OVson/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
 	if (!hSession)
 		return false;
+
+	// Force TLS 1.2/1.3
+	DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | 0x00000800;
+	WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+
 	HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
 	if (!hConnect)
 	{
@@ -143,16 +153,20 @@ bool Http::postJson(const std::string &url, const std::string &jsonBody, std::st
 	}
 	std::wstring hdr = L"Content-Type: application/json\r\n";
 	WinHttpAddRequestHeaders(hRequest, hdr.c_str(), (DWORD)-1L, WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
-	BOOL sent = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, (LPVOID)jsonBody.data(), (DWORD)jsonBody.size(), (DWORD)jsonBody.size(), 0);
-	if (!sent)
+	
+	DWORD securityFlags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | 
+	                      SECURITY_FLAG_IGNORE_CERT_CN_INVALID | SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
+	WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &securityFlags, sizeof(securityFlags));
+	WinHttpSetOption(hRequest, WINHTTP_OPTION_CLIENT_CERT_CONTEXT, WINHTTP_NO_CLIENT_CERT_CONTEXT, 0);
+
+	if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, (LPVOID)jsonBody.data(), (DWORD)jsonBody.size(), (DWORD)jsonBody.size(), 0))
 	{
 		WinHttpCloseHandle(hRequest);
 		WinHttpCloseHandle(hConnect);
 		WinHttpCloseHandle(hSession);
 		return false;
 	}
-	BOOL ok = WinHttpReceiveResponse(hRequest, NULL);
-	if (!ok)
+	if (!WinHttpReceiveResponse(hRequest, NULL))
 	{
 		WinHttpCloseHandle(hRequest);
 		WinHttpCloseHandle(hConnect);
@@ -162,13 +176,7 @@ bool Http::postJson(const std::string &url, const std::string &jsonBody, std::st
 	DWORD statusCode = 0;
 	DWORD len = sizeof(statusCode);
 	WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &len, WINHTTP_NO_HEADER_INDEX);
-	if (statusCode != 200)
-	{
-		WinHttpCloseHandle(hRequest);
-		WinHttpCloseHandle(hConnect);
-		WinHttpCloseHandle(hSession);
-		return false;
-	}
+	
 	responseBody.clear();
 	for (;;)
 	{
@@ -185,5 +193,5 @@ bool Http::postJson(const std::string &url, const std::string &jsonBody, std::st
 	WinHttpCloseHandle(hRequest);
 	WinHttpCloseHandle(hConnect);
 	WinHttpCloseHandle(hSession);
-	return true;
+	return (statusCode == 200);
 }
