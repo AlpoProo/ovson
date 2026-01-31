@@ -136,11 +136,15 @@ namespace Render {
         glLoadIdentity();
 
         float padding = 20.0f;
-        float notifW = 240.0f;
         float notifH = 54.0f;
         float yPos = sh - notifH - padding;
 
         for (auto it = m_notifications.begin(); it != m_notifications.end(); ) {
+            float titleW = g_notifyFont.getStringWidth(it->title);
+            float msgW = g_notifyFont.getStringWidth(it->message);
+            float maxContentW = (titleW > msgW) ? titleW : msgW;
+            float notifW = maxContentW + 40.0f;
+            if (notifW < 240.0f) notifW = 240.0f;
             it->timer += dt;
             
             float life = it->timer / it->duration;
