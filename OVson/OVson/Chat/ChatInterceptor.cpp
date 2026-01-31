@@ -1074,27 +1074,28 @@ static void updateTabListStats()
 
                                         // append tags if enabled
                                         if (Config::isTagsEnabled()) {
-                                            std::string activeS = Config::getActiveTagService();
-                                            if (activeS == "Urchin") {
-                                                auto uTagRes = Urchin::getPlayerTags(name);
-                                                if (uTagRes && !uTagRes->tags.empty()) {
-                                                    for (const auto& tag : uTagRes->tags) {
-                                                        if (tag.type == "Blatant Cheater") formatted += " \xC2\xA7" "4[B]";
-                                                        else if (tag.type == "Sniper") formatted += " \xC2\xA7" "6[S]";
-                                                        else if (tag.type == "Closet Cheater") formatted += " \xC2\xA7" "c[C]";
-                                                        else if (tag.type == "Legit") formatted += " \xC2\xA7" "a[L]";
-                                                        else if (tag.type == "Media") formatted += " \xC2\xA7" "d[M]";
-                                                        else if (tag.type == "Staff") formatted += " \xC2\xA7" "b[STAFF]";
-                                                        break; 
-                                                    }
+                                            auto uTagRes = Urchin::getPlayerTags(name);
+                                            if (uTagRes && !uTagRes->tags.empty()) {
+                                                for (const auto& tag : uTagRes->tags) {
+                                                    if (tag.type == "Blatant Cheater") formatted += " \xC2\xA7" "c[BC]";
+                                                    else if (tag.type == "Sniper") formatted += " \xC2\xA7" "6[S]";
+                                                    else if (tag.type == "Closet Cheater") formatted += " \xC2\xA7" "c[CC]";
+                                                    else if (tag.type == "Legit") formatted += " \xC2\xA7" "a[L]";
+                                                    else if (tag.type == "Media") formatted += " \xC2\xA7" "d[M]";
+                                                    else if (tag.type == "Staff") formatted += " \xC2\xA7" "b[STAFF]";
+                                                    break; 
                                                 }
-                                            } else if (activeS == "Seraph") {
-                                                auto uP = ChatInterceptor::g_playerStatsMap.find(name);
-                                                if (uP != ChatInterceptor::g_playerStatsMap.end() && !uP->second.uuid.empty()) {
-                                                    auto sTagRes = Seraph::getPlayerTags(name, uP->second.uuid);
-                                                    if (sTagRes && !sTagRes->tags.empty()) {
-                                                        formatted += " \xC2\xA7" "4[SR]";
-                                                    }
+                                            }
+
+                                            auto uP = ChatInterceptor::g_playerStatsMap.find(name);
+                                            if (uP != ChatInterceptor::g_playerStatsMap.end() && !uP->second.uuid.empty()) {
+                                                auto sTagRes = Seraph::getPlayerTags(name, uP->second.uuid);
+                                                if (sTagRes && !sTagRes->tags.empty()) {
+                                                    std::string tagType = sTagRes->tags[0].type;
+                                                    if (tagType == "Confirmed Cheater") formatted += " \xC2\xA7" "d[C]";
+                                                    else if (tagType == "Blatant Cheating") formatted += " \xC2\xA7" "c[BC]";
+                                                    else if (tagType == "Closet Cheating") formatted += " \xC2\xA7" "c[CC]";
+                                                    else formatted += " \xC2\xA7" "c[S]";
                                                 }
                                             }
                                         }
