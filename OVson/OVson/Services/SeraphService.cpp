@@ -126,7 +126,7 @@ namespace Seraph {
                 g_cache[uuid] = { result, std::chrono::steady_clock::now() };
             }
 
-            if (!result.tags.empty() && ChatInterceptor::isInGame(username)) {
+            if (!result.tags.empty() && ChatInterceptor::shouldAlert(username)) {
                 std::string type = result.tags[0].type;
                 std::string alert = ChatSDK::formatPrefix() + "\xC2\xA7" "4SERAPH ALERT: \xC2\xA7" "f" + username + " is blacklisted: \xC2\xA7" "l" + type + "\xC2\xA7" "r!";
                 ChatSDK::showClientMessage(alert);

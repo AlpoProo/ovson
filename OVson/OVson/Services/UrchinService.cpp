@@ -167,7 +167,7 @@ namespace Urchin {
             if (success) {
                 Logger::log(Config::DebugCategory::Urchin, ">>> Urchin Success: %s Found %d tags <<<", username.c_str(), (int)result.tags.size());
                 
-                if (!result.tags.empty() && ChatInterceptor::isInGame(username)) {
+                if (!result.tags.empty() && ChatInterceptor::shouldAlert(username)) {
                     for (const auto& t : result.tags) {
                         std::string type = t.type;
                         for (auto& c : type) c = toupper(c);

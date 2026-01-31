@@ -58,6 +58,8 @@ static std::unordered_map<std::string, int> g_teamProbeTries;
 static std::unordered_set<std::string> g_processedPlayers;
 // static std::queue<std::string> g_fetchQueue; // Removed
 static std::unordered_set<std::string> g_queuedPlayers; // kept for logic tracking but might be redundant with activeFetches
+static std::unordered_set<std::string> g_alertedPlayers;
+static std::mutex g_alertedMutex;
 static std::mutex g_queueMutex;
 // static std::condition_variable g_queueCV; // Removed
 // static std::vector<std::thread> g_workers; // Removed
@@ -1303,6 +1305,10 @@ static void resetGameCache()
     g_onlinePlayers.clear();
     g_playerFetchRetries.clear();
     {
+        std::lock_guard<std::mutex> lock(g_alertedMutex);
+        g_alertedPlayers.clear();
+    }
+    {
         std::lock_guard<std::mutex> qlock(g_queueMutex);
         g_queuedPlayers.clear();
     }
@@ -1781,4 +1787,12 @@ void ChatInterceptor::poll()
 bool ChatInterceptor::isInGame(const std::string& name) {
     std::lock_guard<std::mutex> lock(g_statsMutex);
     return g_playerStatsMap.count(name) > 0;
+}
+
+bool ChatInterceptor::shouldAlert(const std::string& name) {
+    if (!isInGame(name)) return false;
+    std::lock_guard<std::mutex> lock(g_alertedMutex);
+    if (g_alertedPlayers.count(name)) return false;
+    g_alertedPlayers.insert(name);
+    return true;
 }
