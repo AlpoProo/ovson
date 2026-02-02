@@ -36,7 +36,7 @@ static bool g_tagsEnabled = false;
 static std::string g_activeTagService = "Urchin";
 static bool g_chatBypasserEnabled = false;
 static bool g_discordRpcEnabled = true;
-static std::string g_discordAppId = "1467865675262329019";
+static std::string g_discordAppId = "";
 static HMODULE g_hModule = nullptr;
 
 static bool g_debugGlobal = true;
@@ -480,3 +480,4 @@ bool Config::isShowWlr() { return g_showWlr; }
 void Config::setShowWlr(bool show) { g_showWlr = show; save(); }
 bool Config::isShowWs() { return g_showWs; }
 void Config::setShowWs(bool show) { g_showWs = show; save(); }
+
