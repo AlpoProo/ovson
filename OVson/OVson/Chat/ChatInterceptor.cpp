@@ -8,6 +8,7 @@
 #include "Commands.h"
 #include "ChatSDK.h"
 #include "../Services/Hypixel.h"
+#include "../Services/DiscordManager.h"
 #include "../Config/Config.h"
 #include "../Utils/Logger.h"
 #include "../Java.h"
@@ -15,6 +16,7 @@
 #include "../Logic/AutoGG.h"
 #include "../Services/UrchinService.h"
 #include "../Services/SeraphService.h"
+#include "../Utils/ChatBypasser.h"
 using namespace ChatInterceptor;
 #include <string>
 #include <vector>
@@ -29,6 +31,7 @@ using namespace ChatInterceptor;
 #include <queue>
 #include <condition_variable>
 #include <atomic>
+#include <cctype>
 
 
 // gosh so many messy messy messy
@@ -972,7 +975,7 @@ static void updateTabListStats()
     jclass cctCls = lc->GetClass("net.minecraft.util.ChatComponentText");
     jmethodID cctInit = cctCls ? env->GetMethodID(cctCls, "<init>", "(Ljava/lang/String;)V") : nullptr;
 
-    std::string currentTabMode = Config::getTabMode();
+    std::string currentSortMode = Config::getSortMode();
     std::vector<std::string> currentNames;
 
     if (m_has && m_next)
@@ -995,7 +998,13 @@ static void updateTabListStats()
                         const char *nameUtf = env->GetStringUTFChars(jname, 0);
                         if (nameUtf)
                         {
-                            currentNames.push_back(nameUtf);
+                            std::string name(nameUtf);
+                            while (name.length() >= 2 && (unsigned char)name[0] == 0xC2 && (unsigned char)name[1] == 0xA7) {
+                                name = name.substr(2);
+                                if (!name.empty() && isdigit((unsigned char)name[0])) name = name.substr(1);
+                            }
+                            
+                            currentNames.push_back(name);
                             env->ReleaseStringUTFChars(jname, nameUtf);
                         }
                         env->DeleteLocalRef(jname);
@@ -1034,16 +1043,19 @@ static void updateTabListStats()
                     if (jn)
                     {
                         const char *utf = env->GetStringUTFChars(jn, 0);
-                        if (utf)
-                        {
-                            std::string name = utf;
-                            env->ReleaseStringUTFChars(jn, utf);
+                        std::string name(utf ? utf : "");
+                        if (utf) env->ReleaseStringUTFChars(jn, utf);
+                        
+                        while (name.length() >= 2 && (unsigned char)name[0] == 0xC2 && (unsigned char)name[1] == 0xA7) {
+                            name = name.substr(2);
+                            if (!name.empty() && isdigit((unsigned char)name[0])) name = name.substr(1);
+                        }
 
-                            if (forceReset)
-                            {
-                                env->CallVoidMethod(info, m_setDisp, nullptr);
-                            }
-                            else if (isTabEnabled && cctInit && m_setDisp)
+                        if (forceReset)
+                        {
+                            env->CallVoidMethod(info, m_setDisp, nullptr);
+                        }
+                        else if (Config::isTabEnabled() && cctInit && m_setDisp)
                             {
                                 Hypixel::PlayerStats stats;
                                 bool hasStats = false;
@@ -1112,24 +1124,101 @@ static void updateTabListStats()
                                         }
                                         formatted += " \xC2\xA7" "7: ";
                                         
-                                        if (currentTabMode == "fk") {
+                                        std::string dMode = Config::getTabDisplayMode();
+                                        std::transform(dMode.begin(), dMode.end(), dMode.begin(), ::tolower);
+
+                                        if (dMode == "fk") {
                                             formatted += colorForFinalKills(stats.bedwarsFinalKills);
                                             formatted += std::to_string(stats.bedwarsFinalKills);
-                                        } else if (currentTabMode == "fkdr") {
+                                        } else if (dMode == "fkdr") {
                                             double fkdr = (stats.bedwarsFinalDeaths == 0) ? (double)stats.bedwarsFinalKills : (double)stats.bedwarsFinalKills / stats.bedwarsFinalDeaths;
                                             std::ostringstream ss; ss << std::fixed << std::setprecision(2) << fkdr;
                                             formatted += colorForFkdr(fkdr);
                                             formatted += ss.str();
-                                        } else if (currentTabMode == "wins") {
+                                        } else if (dMode == "wins") {
                                             formatted += colorForWins(stats.bedwarsWins);
                                             formatted += std::to_string(stats.bedwarsWins);
-                                        } else if (currentTabMode == "wlr") {
+                                        } else if (dMode == "wlr") {
                                             double wlr = (stats.bedwarsLosses == 0) ? (double)stats.bedwarsWins : (double)stats.bedwarsWins / stats.bedwarsLosses;
                                             std::ostringstream ss; ss << std::fixed << std::setprecision(2) << wlr;
                                             formatted += colorForWlr(wlr);
                                             formatted += ss.str();
+                                        } else if (dMode == "star" || dMode == "lvl") {
+                                            formatted += "\xC2\xA7" "6";
+                                            formatted += std::to_string(stats.bedwarsStar);
+                                            formatted += "\xC2\xA7" "e\xE2\x9C\xAF";
+                                        } else if (dMode == "ws") {
+                                            formatted += "\xC2\xA7" "d";
+                                            formatted += std::to_string(stats.winstreak);
+                                            formatted += " WS";
+                                        } else if (dMode == "team") {
+                                            formatted += stats.teamColor.empty() ? "\xC2\xA7" "7None" : stats.teamColor;
                                         }
                                     }
+
+                                    // sorting prefix hack
+                                    // prefix with hidden color codes that encode the rank
+                                    // §0§R§A§N§K is usually ignored by display but affects alphabetical sort
+                                    
+                                    std::string sortMetric = Config::getSortMode();
+                                    std::transform(sortMetric.begin(), sortMetric.end(), sortMetric.begin(), ::tolower);
+                                    double sortVal = 0;
+                                    
+                                    if (sortMetric == "fk") sortVal = (double)stats.bedwarsFinalKills;
+                                    else if (sortMetric == "fkdr") sortVal = (stats.bedwarsFinalDeaths == 0) ? (double)stats.bedwarsFinalKills : (double)stats.bedwarsFinalKills / stats.bedwarsFinalDeaths;
+                                    else if (sortMetric == "wins") sortVal = (double)stats.bedwarsWins;
+                                    else if (sortMetric == "wlr") sortVal = (stats.bedwarsLosses == 0) ? (double)stats.bedwarsWins : (double)stats.bedwarsWins / stats.bedwarsLosses;
+                                    else if (sortMetric == "star") sortVal = (double)stats.bedwarsStar;
+                                    else if (sortMetric == "ws") sortVal = (double)stats.winstreak;
+                                    else if (sortMetric == "team") {
+                                        std::string t = stats.teamColor;
+                                        if (t == "Red") sortVal = 100;
+                                        else if (t == "Blue") sortVal = 200;
+                                        else if (t == "Green") sortVal = 300;
+                                        else if (t == "Yellow") sortVal = 400;
+                                        else if (t == "Aqua") sortVal = 500;
+                                        else if (t == "White") sortVal = 600;
+                                        else if (t == "Pink") sortVal = 700;
+                                        else if (t == "Gray" || t == "Grey") sortVal = 800;
+                                        else sortVal = 999;
+                                    }
+
+                                    long rank = (long)(sortVal * 100.0);
+                                    if (Config::isTabSortDescending()) {
+                                        rank = 100000000L - rank;
+                                    }
+                                    if (rank < 0) rank = 0;
+                                    
+                                    std::string sortPrefix = "";
+                                    char rankBuf[16];
+                                    sprintf_s(rankBuf, "%08ld", rank);
+                                    for(int i=0; i<8; ++i) {
+                                        sortPrefix += "\xC2\xA7";
+                                        sortPrefix += rankBuf[i];
+                                    }
+                                    
+                                    jclass gpCls = env->GetObjectClass(prof);
+                                    jfieldID f_gpName = env->GetFieldID(gpCls, "name", "Ljava/lang/String;");
+                                    if (f_gpName) {
+                                        jstring currentNameObj = (jstring)env->GetObjectField(prof, f_gpName);
+                                        if (currentNameObj) {
+                                            const char* curNameStr = env->GetStringUTFChars(currentNameObj, 0);
+                                            if (curNameStr) {
+                                                std::string cName = curNameStr;
+                                                env->ReleaseStringUTFChars(currentNameObj, curNameStr);
+                                                while (cName.length() >= 2 && (unsigned char)cName[0] == 0xC2 && (unsigned char)cName[1] == 0xA7) {
+                                                    cName = cName.substr(2);
+                                                    if (!cName.empty() && isdigit((unsigned char)cName[0])) cName = cName.substr(1);
+                                                }
+                                                std::string newName = sortPrefix + cName;
+                                                jstring newNameObj = env->NewStringUTF(newName.c_str());
+                                                env->SetObjectField(prof, f_gpName, newNameObj);
+                                                env->DeleteLocalRef(newNameObj);
+                                            }
+                                            env->DeleteLocalRef(currentNameObj);
+                                        }
+                                    }
+                                    env->DeleteLocalRef(gpCls);
 
                                     jstring jf = env->NewStringUTF(formatted.c_str());
                                     jobject component = (jf) ? env->NewObject(cctCls, cctInit, jf) : nullptr;
@@ -1141,13 +1230,12 @@ static void updateTabListStats()
                                     if (jf) env->DeleteLocalRef(jf);
                                 }
                             }
+                            env->DeleteLocalRef(jn);
                         }
-                        env->DeleteLocalRef(jn);
+                        env->DeleteLocalRef(prof);
                     }
-                    env->DeleteLocalRef(prof);
-                }
+                env->DeleteLocalRef(info);
             }
-            env->DeleteLocalRef(info);
         }
     }
 
@@ -1400,7 +1488,6 @@ static void tailLogOnce()
     if (!ReadFile(g_logHandle, buf, sizeof(buf), &read, nullptr) || read == 0)
         return;
     g_logOffset += read;
-    Logger::info("log dosyası okundu");
     g_logBuf.append(buf, buf + read);
 
     size_t nl;
@@ -1682,6 +1769,8 @@ void ChatInterceptor::poll()
     if (!g_initialized || !env)
         return;
 
+    Services::DiscordManager::getInstance()->update();
+
     if (lc->CheckException()) return;
 
     ULONGLONG now = GetTickCount64();
@@ -1754,22 +1843,43 @@ void ChatInterceptor::poll()
                     SHORT enterState = GetAsyncKeyState(VK_RETURN);
                     static bool wasEnterDown = false;
                     bool isEnterDown = (enterState & 0x8000) != 0;
-                    if (!wasEnterDown && isEnterDown && !text.empty() && text[0] == '.')
+                    if (!wasEnterDown && isEnterDown && !text.empty())
                     {
-                        jmethodID setText = env->GetMethodID(tfCls, "setText", "(Ljava/lang/String;)V");
-                        if (!setText) setText = env->GetMethodID(tfCls, "func_146180_a", "(Ljava/lang/String;)V");
-                        
-                        if (setText)
-                        {
-                            jstring empty = env->NewStringUTF("");
-                            env->CallVoidMethod(input, setText, empty);
-                            env->DeleteLocalRef(empty);
+                        if (text[0] == '.') {
+                            jmethodID setText = env->GetMethodID(tfCls, "setText", "(Ljava/lang/String;)V");
+                            if (!setText) setText = env->GetMethodID(tfCls, "func_146180_a", "(Ljava/lang/String;)V");
                             
-                            CommandRegistry::instance().tryDispatch(text);
+                            if (setText)
+                            {
+                                jstring empty = env->NewStringUTF("");
+                                env->CallVoidMethod(input, setText, empty);
+                                env->DeleteLocalRef(empty);
+                                
+                                CommandRegistry::instance().tryDispatch(text);
 
-                            jmethodID m_display = env->GetMethodID(mcCls, "displayGuiScreen", "(Lnet/minecraft/client/gui/GuiScreen;)V");
-                            if (!m_display) m_display = env->GetMethodID(mcCls, "func_147108_a", "(Lnet/minecraft/client/gui/GuiScreen;)V");
-                            if (m_display) env->CallVoidMethod(mcObj, m_display, nullptr);
+                                jmethodID m_display = env->GetMethodID(mcCls, "displayGuiScreen", "(Lnet/minecraft/client/gui/GuiScreen;)V");
+                                if (!m_display) m_display = env->GetMethodID(mcCls, "func_147108_a", "(Lnet/minecraft/client/gui/GuiScreen;)V");
+                                if (m_display) env->CallVoidMethod(mcObj, m_display, nullptr);
+                            }
+                        }
+                        else if (Config::isChatBypasserEnabled()) {
+                            // Bypass!
+                            std::string bypassed = ChatBypasser::process(text);
+                            
+                            jmethodID setText = env->GetMethodID(tfCls, "setText", "(Ljava/lang/String;)V");
+                            if (!setText) setText = env->GetMethodID(tfCls, "func_146180_a", "(Ljava/lang/String;)V");
+
+                            if (setText) {
+                                jstring empty = env->NewStringUTF("");
+                                env->CallVoidMethod(input, setText, empty);
+                                env->DeleteLocalRef(empty);
+
+                                ChatSDK::sendClientChat(bypassed);
+
+                                jmethodID m_display = env->GetMethodID(mcCls, "displayGuiScreen", "(Lnet/minecraft/client/gui/GuiScreen;)V");
+                                if (!m_display) m_display = env->GetMethodID(mcCls, "func_147108_a", "(Lnet/minecraft/client/gui/GuiScreen;)V");
+                                if (m_display) env->CallVoidMethod(mcObj, m_display, nullptr);
+                            }
                         }
                     }
                     wasEnterDown = isEnterDown;
@@ -1795,4 +1905,11 @@ bool ChatInterceptor::shouldAlert(const std::string& name) {
     if (g_alertedPlayers.count(name)) return false;
     g_alertedPlayers.insert(name);
     return true;
+}
+bool ChatInterceptor::isInHypixelGame() {
+    return g_inHypixelGame;
+}
+
+int ChatInterceptor::getGameMode() {
+    return g_mode;
 }

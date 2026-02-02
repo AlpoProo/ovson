@@ -19,6 +19,7 @@
 #include "Config/Config.h"
 #include "Render/RenderHook.h"
 #include "Render/TextureLoader.h"
+#include "Services/DiscordManager.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -96,6 +97,7 @@ void init(void* instance) {
             wasEndDown = isEndDown;
             ChatInterceptor::poll();
             RenderHook::poll();
+            Services::DiscordManager::getInstance()->update();
             Sleep(5);
         }
     }
@@ -104,6 +106,12 @@ void init(void* instance) {
     Sleep(200);
 
     ChatInterceptor::shutdown();
+    
+    try {
+        Services::DiscordManager::getInstance()->shutdown();
+    } catch (...) {}
+    Sleep(100);
+
     Logger::shutdown();
     if (file) { fclose(file); file = nullptr; }
 

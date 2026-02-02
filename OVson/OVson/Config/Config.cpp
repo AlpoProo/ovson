@@ -9,7 +9,15 @@ static std::string g_configPath;
 static std::string g_apiKey;
 static std::string g_overlayMode = "chat"; // default to chat mode
 static bool g_tabEnabled = false;
-static std::string g_tabMode = "fkdr"; // fk, fkdr, wins, wlr
+static std::string g_tabDisplayMode = "fkdr";
+static bool g_tabSortDescending = true;
+static std::string g_sortMode = "Team";
+static bool g_showStar = true;
+static bool g_showFk = true;
+static bool g_showFkdr = true;
+static bool g_showWins = true;
+static bool g_showWlr = true;
+static bool g_showWs = true;
 static bool g_debugging = false;
 static bool g_bedDefenseEnabled = false;
 static int g_clickGuiKey = 45; // INSERT
@@ -26,6 +34,10 @@ static bool g_seraphEnabled = false;
 static std::string g_seraphApiKey = "";
 static bool g_tagsEnabled = false;
 static std::string g_activeTagService = "Urchin";
+static bool g_chatBypasserEnabled = false;
+static bool g_discordRpcEnabled = true;
+static std::string g_discordAppId = "1467865675262329019";
+static HMODULE g_hModule = nullptr;
 
 static bool g_debugGlobal = true;
 static bool g_debugGameDetection = true;
@@ -121,7 +133,8 @@ static bool parseJsonUInt(const std::string &all, const char *key, DWORD &out){
 	return true;
 }
 
-bool Config::initialize(HMODULE){
+bool Config::initialize(HMODULE self){
+    g_hModule = self;
 	g_configPath = getConfigPath();
 	FILE *f = nullptr;
 	fopen_s(&f, g_configPath.c_str(), "r");
@@ -129,7 +142,8 @@ bool Config::initialize(HMODULE){
 		g_apiKey.clear();
 		g_overlayMode = "chat";
 		g_tabEnabled = false;
-		g_tabMode = "fkdr";
+		g_tabDisplayMode = "fkdr";
+		g_tabSortDescending = true;
 		return save();
 	}
 	char buf[2048];
@@ -150,10 +164,13 @@ bool Config::initialize(HMODULE){
 	if (!parseJsonBool(all, "tabEnabled", g_tabEnabled))
 		g_tabEnabled = false;
 	
-	if (parseJsonLine(all, "tabMode", val))
-		g_tabMode = val;
+	if (parseJsonLine(all, "tabDisplayMode", val))
+		g_tabDisplayMode = val;
 	else
-		g_tabMode = "fkdr";
+		g_tabDisplayMode = "fkdr";
+
+	if (!parseJsonBool(all, "tabSortDescending", g_tabSortDescending))
+		g_tabSortDescending = true;
 
 	if (!parseJsonBool(all, "debugging", g_debugging))
 		g_debugging = false;
@@ -211,6 +228,35 @@ bool Config::initialize(HMODULE){
     else
         g_activeTagService = "Urchin";
 
+    if (!parseJsonBool(all, "chatBypasserEnabled", g_chatBypasserEnabled))
+        g_chatBypasserEnabled = false;
+
+    if (!parseJsonBool(all, "discordRpcEnabled", g_discordRpcEnabled))
+        g_discordRpcEnabled = true;
+
+    if (parseJsonLine(all, "discordAppId", val))
+        g_discordAppId = val;
+    else
+        g_discordAppId = "1467865675262329019";
+
+    // Migration: If the loaded ID is the old broken one, force it to the new one
+    if (g_discordAppId == "1335272304856010773") {
+        g_discordAppId = "1467865675262329019";
+        save(); // Save the new ID to config.json immediately
+    }
+
+    if (parseJsonLine(all, "sortMode", val))
+        g_sortMode = val;
+    else
+        g_sortMode = "Team";
+
+    if (!parseJsonBool(all, "showStar", g_showStar)) g_showStar = true;
+    if (!parseJsonBool(all, "showFk", g_showFk)) g_showFk = true;
+    if (!parseJsonBool(all, "showFkdr", g_showFkdr)) g_showFkdr = true;
+    if (!parseJsonBool(all, "showWins", g_showWins)) g_showWins = true;
+    if (!parseJsonBool(all, "showWlr", g_showWlr)) g_showWlr = true;
+    if (!parseJsonBool(all, "showWs", g_showWs)) g_showWs = true;
+
     parseJsonBool(all, "debugGlobal", g_debugGlobal);
     parseJsonBool(all, "debugGameDetection", g_debugGameDetection);
     parseJsonBool(all, "debugBedDetection", g_debugBedDetection);
@@ -223,6 +269,8 @@ bool Config::initialize(HMODULE){
 	return true;
 }
 
+HMODULE Config::getModuleHandle() { return g_hModule; }
+
 bool Config::save(){
 	FILE *f = nullptr;
 	fopen_s(&f, g_configPath.c_str(), "w");
@@ -232,7 +280,6 @@ bool Config::save(){
 		"  \"apiKey\": \"%s\",\n"
 		"  \"overlayMode\": \"%s\",\n"
 		"  \"tabEnabled\": %s,\n"
-		"  \"tabMode\": \"%s\",\n"
 		"  \"debugging\": %s,\n"
 		"  \"bedDefenseEnabled\": %s,\n"
 		"  \"clickGuiKey\": %d,\n"
@@ -249,6 +296,7 @@ bool Config::save(){
 		"  \"seraphApiKey\": \"%s\",\n"
         "  \"tagsEnabled\": %s,\n"
         "  \"activeTagService\": \"%s\",\n"
+        "  \"chatBypasserEnabled\": %s,\n"
         "  \"debugGlobal\": %s,\n"
         "  \"debugGameDetection\": %s,\n"
         "  \"debugBedDetection\": %s,\n"
@@ -256,16 +304,58 @@ bool Config::save(){
         "  \"debugSeraph\": %s,\n"
         "  \"debugGUI\": %s,\n"
         "  \"debugBedDefense\": %s,\n"
-        "  \"debugGeneral\": %s\n"
+        "  \"debugGeneral\": %s,\n"
+        "  \"discordRpcEnabled\": %s,\n"
+        "  \"discordAppId\": \"%s\",\n"
+        "  \"tabDisplayMode\": \"%s\",\n"
+        "  \"tabSortDescending\": %s,\n"
+        "  \"sortMode\": \"%s\",\n"
+        "  \"showStar\": %s,\n"
+        "  \"showFk\": %s,\n"
+        "  \"showFkdr\": %s,\n"
+        "  \"showWins\": %s,\n"
+        "  \"showWlr\": %s,\n"
+        "  \"showWs\": %s\n"
 		"}\n", 
-		g_apiKey.c_str(), g_overlayMode.c_str(), g_tabEnabled ? "true" : "false", g_tabMode.c_str(), g_debugging ? "true" : "false", g_bedDefenseEnabled ? "true" : "false",
-        g_clickGuiKey, g_clickGuiOn ? "true" : "false", g_notificationsEnabled ? "true" : "false", g_autoGGEnabled ? "true" : "false", g_autoGGMessage.c_str(),
-        g_themeColor, g_motionBlurEnabled ? "true" : "false", g_motionBlurAmount,
-        g_urchinEnabled ? "true" : "false", g_urchinApiKey.c_str(),
-        g_seraphEnabled ? "true" : "false", g_seraphApiKey.c_str(),
-        g_tagsEnabled ? "true" : "false", g_activeTagService.c_str(),
-        g_debugGlobal ? "true" : "false", g_debugGameDetection ? "true" : "false", g_debugBedDetection ? "true" : "false",
-        g_debugUrchin ? "true" : "false", g_debugSeraph ? "true" : "false", g_debugGUI ? "true" : "false", g_debugBedDefense ? "true" : "false", g_debugGeneral ? "true" : "false");
+ 		g_apiKey.c_str(), 
+        g_overlayMode.c_str(), 
+        g_tabEnabled ? "true" : "false", 
+        g_debugging ? "true" : "false", 
+        g_bedDefenseEnabled ? "true" : "false",
+        g_clickGuiKey, 
+        g_clickGuiOn ? "true" : "false", 
+        g_notificationsEnabled ? "true" : "false", 
+        g_autoGGEnabled ? "true" : "false", 
+        g_autoGGMessage.c_str(),
+        g_themeColor, 
+        g_motionBlurEnabled ? "true" : "false", 
+        g_motionBlurAmount,
+        g_urchinEnabled ? "true" : "false", 
+        g_urchinApiKey.c_str(),
+        g_seraphEnabled ? "true" : "false", 
+        g_seraphApiKey.c_str(),
+        g_tagsEnabled ? "true" : "false", 
+        g_activeTagService.c_str(),
+        g_chatBypasserEnabled ? "true" : "false",
+        g_debugGlobal ? "true" : "false", 
+        g_debugGameDetection ? "true" : "false", 
+        g_debugBedDetection ? "true" : "false", 
+        g_debugUrchin ? "true" : "false", 
+        g_debugSeraph ? "true" : "false", 
+        g_debugGUI ? "true" : "false", 
+        g_debugBedDefense ? "true" : "false", 
+        g_debugGeneral ? "true" : "false",
+        g_discordRpcEnabled ? "true" : "false", 
+        g_discordAppId.c_str(),
+        g_tabDisplayMode.c_str(), 
+        g_tabSortDescending ? "true" : "false",
+        g_sortMode.c_str(),
+        g_showStar ? "true" : "false",
+        g_showFk ? "true" : "false",
+        g_showFkdr ? "true" : "false",
+        g_showWins ? "true" : "false",
+        g_showWlr ? "true" : "false",
+        g_showWs ? "true" : "false");
 	fclose(f);
 	return true;
 }
@@ -286,11 +376,18 @@ void Config::setOverlayMode(const std::string &mode){
 
 bool Config::isTabEnabled() { return g_tabEnabled; }
 void Config::setTabEnabled(bool enabled) { g_tabEnabled = enabled; save(); }
-const std::string& Config::getTabMode() { return g_tabMode; }
-void Config::setTabMode(const std::string& mode) { g_tabMode = mode; save(); }
 
-bool Config::isDebugging() { return g_debugGlobal; }
-void Config::setDebugging(bool enabled) { g_debugGlobal = enabled; save(); }
+const std::string& Config::getSortMode() { return g_sortMode; }
+void Config::setSortMode(const std::string& mode) { g_sortMode = mode; save(); }
+
+const std::string& Config::getTabDisplayMode() { return g_tabDisplayMode; }
+void Config::setTabDisplayMode(const std::string& mode) { g_tabDisplayMode = mode; save(); }
+
+bool Config::isTabSortDescending() { return g_tabSortDescending; }
+void Config::setTabSortDescending(bool desc) { g_tabSortDescending = desc; save(); }
+
+bool Config::isDebugging() { return g_debugging; }
+void Config::setDebugging(bool enabled) { g_debugging = enabled; save(); }
 
 bool Config::isBedDefenseEnabled() { return g_bedDefenseEnabled; }
 void Config::setBedDefenseEnabled(bool enabled) { g_bedDefenseEnabled = enabled; save(); }
@@ -332,6 +429,9 @@ void Config::setTagsEnabled(bool enabled) { g_tagsEnabled = enabled; save(); }
 const std::string& Config::getActiveTagService() { return g_activeTagService; }
 void Config::setActiveTagService(const std::string& service) { g_activeTagService = service; save(); }
 
+bool Config::isChatBypasserEnabled() { return g_chatBypasserEnabled; }
+void Config::setChatBypasserEnabled(bool enabled) { g_chatBypasserEnabled = enabled; save(); }
+
 bool Config::isDebugEnabled(DebugCategory cat) {
     if (!g_debugGlobal) return false;
     switch (cat) {
@@ -361,3 +461,22 @@ void Config::setDebugEnabled(DebugCategory cat, bool enabled) {
 
 bool Config::isGlobalDebugEnabled() { return g_debugGlobal; }
 void Config::setGlobalDebugEnabled(bool enabled) { g_debugGlobal = enabled; save(); }
+
+bool Config::isDiscordRpcEnabled() { return g_discordRpcEnabled; }
+void Config::setDiscordRpcEnabled(bool enabled) { g_discordRpcEnabled = enabled; save(); }
+const std::string& Config::getDiscordAppId() { return g_discordAppId; }
+void Config::setDiscordAppId(const std::string& id) { g_discordAppId = id; save(); }
+
+
+bool Config::isShowStar() { return g_showStar; }
+void Config::setShowStar(bool show) { g_showStar = show; save(); }
+bool Config::isShowFk() { return g_showFk; }
+void Config::setShowFk(bool show) { g_showFk = show; save(); }
+bool Config::isShowFkdr() { return g_showFkdr; }
+void Config::setShowFkdr(bool show) { g_showFkdr = show; save(); }
+bool Config::isShowWins() { return g_showWins; }
+void Config::setShowWins(bool show) { g_showWins = show; save(); }
+bool Config::isShowWlr() { return g_showWlr; }
+void Config::setShowWlr(bool show) { g_showWlr = show; save(); }
+bool Config::isShowWs() { return g_showWs; }
+void Config::setShowWs(bool show) { g_showWs = show; save(); }

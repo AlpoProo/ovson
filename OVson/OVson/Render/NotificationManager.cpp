@@ -3,6 +3,7 @@
 #include "../Utils/Timer.h"
 #include "../Config/Config.h"
 #include <gl/GL.h>
+#include "RenderUtils.h"
 #include <algorithm>
 #include <cmath>
 #include "RenderHook.h"
@@ -138,7 +139,7 @@ namespace Render {
         glLoadIdentity();
 
         float padding = 20.0f;
-        float notifH = 54.0f;
+        float notifH = 64.0f;
         float yPos = sh - notifH - padding;
 
         for (auto it = m_notifications.begin(); it != m_notifications.end(); ) {
@@ -174,14 +175,19 @@ namespace Render {
             float x = sw - (notifW * slide) - padding;
             float y = yPos;
 
-            drawRect(x, y, notifW, notifH, 0xD0101012, alpha); 
-            drawRect(x, y, 2, notifH, it->getTitleColor(), alpha);
+            glDisable(GL_TEXTURE_2D);
+            RenderUtils::drawRoundedRect(x, y, notifW, notifH, 10.0f, 0xEE111113, alpha); 
+            
+            RenderUtils::drawRoundedRect(x, y, 4, notifH, 2.0f, it->getTitleColor(), alpha);
+
             float progress = 1.0f - life;
-            drawRect(x, y + notifH - 1, notifW * progress, 1, it->getTitleColor(), alpha * 0.8f);
+            if (progress > 0) {
+                RenderUtils::drawRoundedRect(x + 6, y + notifH - 4, (notifW - 12) * progress, 2, 1.0f, it->getTitleColor(), alpha * 0.7f);
+            }
 
             glEnable(GL_TEXTURE_2D);
-            g_notifyFont.drawString(x + 14.0f, y + 10.0f, it->title, applyAlpha(it->getTitleColor(), alpha));
-            g_notifyFont.drawString(x + 14.0f, y + 30.0f, it->message, applyAlpha(it->getBodyColor(), alpha));
+            g_notifyFont.drawString(x + 18.0f, y + 14.0f, it->title, applyAlpha(it->getTitleColor(), alpha));
+            g_notifyFont.drawString(x + 18.0f, y + 36.0f, it->message, applyAlpha(it->getBodyColor(), alpha));
             glDisable(GL_TEXTURE_2D);
 
             yPos -= (notifH + 12.0f);

@@ -6,6 +6,7 @@
 
 namespace Config {
 	bool initialize(HMODULE selfModule);
+    HMODULE getModuleHandle();
 	bool save();
 	const std::string& getApiKey();
 	void setApiKey(const std::string& key);
@@ -20,11 +21,16 @@ namespace Config {
     const std::string& getAutoGGMessage();
     void setAutoGGMessage(const std::string& msg);
 
-	// tab list settings
 	bool isTabEnabled();
 	void setTabEnabled(bool enabled);
-	const std::string& getTabMode(); // "fk", "fkdr", "wins", "wlr"
-	void setTabMode(const std::string& mode);
+	const std::string& getSortMode(); // General sort metric (Stars, FKDR, etc.)
+	void setSortMode(const std::string& mode);
+	
+    const std::string& getTabDisplayMode(); // What stat shows in Tab
+    void setTabDisplayMode(const std::string& mode);
+    
+    bool isTabSortDescending();
+    void setTabSortDescending(bool desc);
 
 	bool isDebugging();
 	void setDebugging(bool enabled);
@@ -59,6 +65,23 @@ namespace Config {
     const std::string& getActiveTagService();
     void setActiveTagService(const std::string& service);
 
+    bool isChatBypasserEnabled();
+    void setChatBypasserEnabled(bool enabled);
+
+    // overlay category visibility
+    bool isShowStar();
+    void setShowStar(bool show);
+    bool isShowFk();
+    void setShowFk(bool show);
+    bool isShowFkdr();
+    void setShowFkdr(bool show);
+    bool isShowWins();
+    void setShowWins(bool show);
+    bool isShowWlr();
+    void setShowWlr(bool show);
+    bool isShowWs();
+    void setShowWs(bool show);
+
     // urchin tags
     bool isUrchinEnabled();
     void setUrchinEnabled(bool enabled);
@@ -86,6 +109,10 @@ namespace Config {
     void setDebugEnabled(DebugCategory cat, bool enabled);
     bool isGlobalDebugEnabled();
     void setGlobalDebugEnabled(bool enabled);
+    bool isDiscordRpcEnabled();
+    void setDiscordRpcEnabled(bool enabled);
+    const std::string& getDiscordAppId();
+    void setDiscordAppId(const std::string& id);
 }
 
 

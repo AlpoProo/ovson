@@ -15,10 +15,12 @@
 #include <thread>
 #include <atomic>
 #include <sstream>
+#include <functional>
 #include "../Services/Hypixel.h"
 #include "../Services/UrchinService.h"
 #include "../Services/SeraphService.h"
 #include "../Chat/ChatInterceptor.h"
+#include "RenderUtils.h"
 
 namespace Render {
 
@@ -52,6 +54,8 @@ namespace Render {
     static float s_dropdownAnim = 0.0f;
     static bool s_isTagsDropdownOpen = false;
     static float s_tagsDropdownAnim = 0.0f;
+    static bool s_isSortOrderDropdownOpen = false;
+    static float s_sortOrderDropdownAnim = 0.0f;
     static Hypixel::PlayerStats s_lookupResult;
     static bool s_hasLookup = false;
     static bool s_searching = false;
@@ -82,9 +86,11 @@ namespace Render {
     }
 
     #define THEME_NAVY Config::getThemeColor()
-    const DWORD THEME_BG = 0xFF0C0C0E;
-    const DWORD THEME_SIDEBAR = 0xFF141416;
+    const DWORD THEME_BG = 0xFF0D0D0F;
+    const DWORD THEME_SIDEBAR = 0xFF121214;
     const DWORD THEME_CARD = 0xFF18181B;
+    const DWORD THEME_ACCENT = THEME_NAVY;
+    const DWORD THEME_BORDER = 0xFF252528;
 
     static float lerp(float a, float b, float t) {
         return a + (b - a) * t;
@@ -95,43 +101,7 @@ namespace Render {
         return (uint32_t)((a << 24) | (color & 0x00FFFFFF));
     }
 
-    static void drawRect(float x, float y, float w, float h, DWORD color, float alphaOverride = -1.0f) {
-        float r = ((color >> 16) & 0xFF) / 255.0f;
-        float g = ((color >> 8) & 0xFF) / 255.0f;
-        float b = (color & 0xFF) / 255.0f;
-        float a = ((color >> 24) & 0xFF) / 255.0f;
-        
-        float finalAlpha = (alphaOverride >= 0.0f) ? alphaOverride : (a * s_animAlpha);
-        
-        glColor4f(r, g, b, finalAlpha); 
-        glBegin(GL_QUADS);
-        glVertex2f(x, y);
-        glVertex2f(x + w, y);
-        glVertex2f(x + w, y + h);
-        glVertex2f(x, y + h);
-        glEnd();
-    }
-    
-    static void drawGradientRect(float x, float y, float w, float h, DWORD col1, DWORD col2) {
-         float r1 = ((col1 >> 16) & 0xFF) / 255.0f;
-         float g1 = ((col1 >> 8) & 0xFF) / 255.0f;
-         float b1 = (col1 & 0xFF) / 255.0f;
-         float a1 = ((col1 >> 24) & 0xFF) / 255.0f;
-         
-         float r2 = ((col2 >> 16) & 0xFF) / 255.0f;
-         float g2 = ((col2 >> 8) & 0xFF) / 255.0f;
-         float b2 = (col2 & 0xFF) / 255.0f;
-         float a2 = ((col2 >> 24) & 0xFF) / 255.0f;
-         
-         glBegin(GL_QUADS);
-         glColor4f(r1, g1, b1, a1 * s_animAlpha);
-         glVertex2f(x, y);
-         glVertex2f(x + w, y);
-         glColor4f(r2, g2, b2, a2 * s_animAlpha);
-         glVertex2f(x + w, y + h);
-         glVertex2f(x, y + h);
-         glEnd();
-    }
+    // moved to RenderUtils.h
 
     static void setMouseGrabbed(bool grabbed) {
         JNIEnv* env = lc->getEnv();
@@ -226,18 +196,23 @@ namespace Render {
     };
     static SwitchAnim s_switches[50]; 
 
-    void drawSwitch(int id, float x, float y, bool enabled, bool hover) {
-        if (id >= 50) id = 0;
-        float offX = x + 2.0f;
-        float onX = x + 22.0f;
-        s_switches[id].targetX = enabled ? onX : offX;
+    static void drawSwitch(int id, float x, float y, bool enabled, bool hovered, float alpha) {
+        float w = 34.0f;
+        float h = 18.0f;
         
-        float diff = s_switches[id].targetX - s_switches[id].currX;
-        s_switches[id].currX += diff * 0.25f; 
+        static std::unordered_map<int, float> anims;
+        if (anims.find(id) == anims.end()) anims[id] = enabled ? 1.0f : 0.0f;
+        anims[id] += ((enabled ? 1.0f : 0.0f) - anims[id]) * 0.2f;
+        float t = anims[id];
 
-        DWORD bg = enabled ? THEME_NAVY : (hover ? 0xFF35353A : 0xFF2A2A2E); 
-        drawRect(x, y, 40, 20, bg); 
-        drawRect(s_switches[id].currX, y + 2, 16, 16, 0xFFFFFFFF);
+        // background pill (bp)
+        DWORD bgBase = RenderUtils::lerpColor(0xFF2D2D31, THEME_NAVY, t);
+        if (hovered) bgBase = RenderUtils::lerpColor(bgBase, 0xFFFFFFFF, 0.15f);
+        
+        RenderUtils::drawRoundedRect(x, y, w, h, h / 2.0f, bgBase, alpha);
+        
+        float knobX = x + 2.0f + t * (w - h);
+        RenderUtils::drawCircle(knobX + (h-4.0f)/2.0f + 1.0f, y + h/2.0f, (h-4.0f)/2.0f, 0xFFFFFFFF, alpha);
     }
 
     void ClickGUI::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -405,7 +380,7 @@ namespace Render {
         bool clickEvent = lClick && !s_lastLButton;
         s_lastLButton = lClick;
 
-        drawRect(0, 0, sw, sh, 0xA0000000); 
+        RenderUtils::drawRect(0, 0, sw, sh, 0xA0000000); 
 
         glPushMatrix();
         float centerX = g_x + g_w/2;
@@ -448,58 +423,62 @@ namespace Render {
              }
         }
         
-        float mainX = g_x;
-        float mainY = g_y;
-        
-        drawRect(mainX, mainY, 170, g_h, THEME_SIDEBAR);
-        drawRect(mainX + 170, mainY, g_w - 170, g_h, THEME_BG);
-        drawGradientRect(mainX + 170, mainY, g_w - 170, 52, 0xFF121214, 0x00121214);
-        drawRect(mainX + 170, mainY + 52, g_w - 170, 1, 0xFF202022); 
-
-        glEnable(GL_TEXTURE_2D);
-        g_guiFont.drawString(mainX + 25, mainY + 24.0f, "OVSON", applyAlpha(THEME_NAVY, s_animAlpha)); 
-        g_guiFont.drawString(mainX + 75, mainY + 38.0f, "CLIENT", applyAlpha(0xFFA0A0A5, s_animAlpha)); 
-
-         float targetY = 85.0f + (s_targetTab * 45.0f);
-         s_tabIndicatorY += (targetY - s_tabIndicatorY) * 0.2f;
+         float mainX = g_x;
+         float mainY = g_y;
          
-         glDisable(GL_TEXTURE_2D);
-         drawRect(mainX, mainY + s_tabIndicatorY - 12.0f, 4, 48, THEME_NAVY); 
-         drawRect(mainX, mainY + s_tabIndicatorY - 12.0f, 165, 48, THEME_NAVY & 0x25FFFFFF);
+         RenderUtils::drawRoundedRect(mainX - 1, mainY - 1, g_w + 2, g_h + 2, 10.0f, THEME_BORDER, s_animAlpha);
+         RenderUtils::drawRoundedRect(mainX, mainY, g_w, g_h, 10.0f, THEME_BG, s_animAlpha);
+         
+         RenderUtils::drawRoundedRect(mainX, mainY, 170, g_h, 10.0f, THEME_SIDEBAR, s_animAlpha);
+         RenderUtils::drawRect(mainX + 160, mainY, 10, g_h, THEME_SIDEBAR, s_animAlpha);
+         
+         RenderUtils::drawGradientRect(mainX + 170, mainY, g_w - 170, 52, 0xFF121214, 0x00121214);
+         RenderUtils::drawRect(mainX + 170, mainY + 52, g_w - 170, 1, 0xFF202022); 
+ 
          glEnable(GL_TEXTURE_2D);
-
-         if (s_activeTab != s_targetTab) {
-             s_contentAlpha -= 0.15f;
-             if (s_contentAlpha <= 0.0f) {
-                 s_activeTab = s_targetTab;
-                 s_contentSlide = 15.0f;
-                 s_targetScroll = 0.0f;
-                 s_scrollOffset = 0.0f;
-             }
-         } else {
-             s_contentAlpha += 0.15f;
-             if (s_contentAlpha > 1.0f) s_contentAlpha = 1.0f;
-             s_contentSlide += (0.0f - s_contentSlide) * 0.15f;
-         }
-
-         static float s_maxScroll = 0.0f;
-         if (s_targetScroll < 0) s_targetScroll = 0;
-         if (s_targetScroll > s_maxScroll) s_targetScroll = s_maxScroll;
-
-         s_scrollOffset += (s_targetScroll - s_scrollOffset) * 0.15f;
-
-         const char* tabs[] = { "Visuals", "Players", "Tags", "Settings", "Debug", "Utils", nullptr };
-         float ty = mainY + 85;
-         for (int i = 0; tabs[i]; ++i) {
-              bool hover = isHovered(mx, my, mainX, ty - 10, 170, 40);
-              DWORD col = (s_targetTab == i) ? 0xFFFFFFFF : (hover ? 0xFFCCCCCC : 0xFF808085);
-              g_guiFont.drawString(mainX + 35, ty, tabs[i], applyAlpha(col, s_animAlpha));
-              if (clickEvent && hover) {
-                  s_targetTab = i;
-                   s_isDropdownOpen = false;
+         g_guiFont.drawString(mainX + 25, mainY + 24.0f, "OVSON", applyAlpha(THEME_NAVY, s_animAlpha)); 
+         g_guiFont.drawString(mainX + 75, mainY + 38.0f, "CLIENT", applyAlpha(0xFFA0A0A5, s_animAlpha)); 
+ 
+          float targetY = 85.0f + (s_targetTab * 45.0f);
+          s_tabIndicatorY += (targetY - s_tabIndicatorY) * 0.2f;
+          
+          glDisable(GL_TEXTURE_2D);
+          RenderUtils::drawRoundedRect(mainX + 15, mainY + s_tabIndicatorY - 12.0f, 140, 48, 8.0f, THEME_NAVY & 0x40FFFFFF);
+          RenderUtils::drawRoundedRect(mainX + 4, mainY + s_tabIndicatorY - 4.0f, 3, 32, 1.5f, THEME_NAVY);
+          glEnable(GL_TEXTURE_2D);
+ 
+          if (s_activeTab != s_targetTab) {
+              s_contentAlpha -= 0.15f;
+              if (s_contentAlpha <= 0.0f) {
+                  s_activeTab = s_targetTab;
+                  s_contentSlide = 15.0f;
+                  s_targetScroll = 0.0f;
+                  s_scrollOffset = 0.0f;
               }
-              ty += 45;
-         }
+          } else {
+              s_contentAlpha += 0.15f;
+              if (s_contentAlpha > 1.0f) s_contentAlpha = 1.0f;
+              s_contentSlide += (0.0f - s_contentSlide) * 0.15f;
+          }
+ 
+          static float s_maxScroll = 0.0f;
+          if (s_targetScroll < 0) s_targetScroll = 0;
+          if (s_targetScroll > s_maxScroll) s_targetScroll = s_maxScroll;
+ 
+          s_scrollOffset += (s_targetScroll - s_scrollOffset) * 0.15f;
+ 
+          const char* tabs[] = { "Visuals", "Players", "Tags", "Settings", "Debug", "Utils", nullptr };
+          float ty = mainY + 85;
+          for (int i = 0; tabs[i]; ++i) {
+               bool hover = isHovered(mx, my, mainX + 15, ty - 12, 140, 40);
+               DWORD col = (s_targetTab == i) ? 0xFFFFFFFF : (hover ? 0xFFCCCCCC : 0xFF808085);
+               g_guiFont.drawString(mainX + 45, ty, tabs[i], applyAlpha(col, s_animAlpha));
+               if (clickEvent && hover) {
+                   s_targetTab = i;
+                    s_isDropdownOpen = false;
+               }
+               ty += 45;
+          }
         
          
          float cx = mainX + 200 + s_contentSlide;
@@ -511,23 +490,25 @@ namespace Render {
          glScissor((int)(mainX + 170), (int)(sh - (mainY + g_h - 10)), (int)(g_w - 170), (int)(g_h - 60));
 
          if (s_activeTab == 5) {
-              g_guiFont.drawString(cx, cy, "Modules", applyAlpha(0xFFFFFFFF, alpha));
+              g_guiFont.drawString(cx, cy, "Utilities", applyAlpha(0xFFFFFFFF, alpha));
               cy += 40;
                g_guiFont.drawString(cx, cy, "Bed Defense", applyAlpha(0xFFFFFFFF, alpha));
-               bool hCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 95);
-               glDisable(GL_TEXTURE_2D);
-               drawRect(mainX + 190, cy - 10, g_w - 210, 95, THEME_CARD, 0.4f * alpha);
-               if (hCard) drawRect(mainX + 190, cy - 10, 2, 95, THEME_NAVY, alpha);
-               glEnable(GL_TEXTURE_2D);
-               g_guiFont.drawString(cx, cy + 18, "X-Ray style outlines for bed defense blocks", applyAlpha(0xFFA0A0A5, alpha));
-               g_guiFont.drawString(cx, cy + 42, "WARNING: THIS PROVIDES AN UNFAIR ADVANTAGE.", applyAlpha(0xFFFF5555, alpha), 0.4f);
-               g_guiFont.drawString(cx, cy + 54, "YOU WILL BE BLACKLISTED IF CAUGHT. USE AT OWN RISK.", applyAlpha(0xFFFF5555, alpha), 0.4f);
+                bool hCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 95);
+                glDisable(GL_TEXTURE_2D);
+                DWORD bedCol = hCard ? 0xFF222226 : THEME_CARD;
+                RenderUtils::drawRoundedRect(mainX + 190, cy - 10, g_w - 210, 95, 8.0f, bedCol, 0.6f * alpha);
+                if (hCard) RenderUtils::drawRect(mainX + 190, cy - 10, 3, 95, THEME_NAVY, alpha);
+                glEnable(GL_TEXTURE_2D);
+                
+                g_guiFont.drawString(cx, cy + 18, "X-Ray style outlines for bed defense blocks", applyAlpha(0xFFA0A0A5, alpha));
+                g_guiFont.drawString(cx, cy + 42, "WARNING: THIS PROVIDES AN UNFAIR ADVANTAGE.", applyAlpha(0xFFFF5555, alpha), 0.4f);
+                g_guiFont.drawString(cx, cy + 54, "YOU WILL BE BLACKLISTED IF CAUGHT. USE AT OWN RISK.", applyAlpha(0xFFFF5555, alpha), 0.4f);
 
-               bool enabled = Config::isBedDefenseEnabled();
-               glDisable(GL_TEXTURE_2D);
-               float swX = mainX + g_w - 65;
-               drawSwitch(0, swX, cy + 15, enabled, hCard); 
-               glEnable(GL_TEXTURE_2D);
+                bool enabled = Config::isBedDefenseEnabled();
+                glDisable(GL_TEXTURE_2D);
+                float swX = mainX + g_w - 65;
+                drawSwitch(0, swX, cy + 15, enabled, hCard, alpha); 
+                glEnable(GL_TEXTURE_2D);
                if (clickEvent && hCard) {
                    bool newState = !enabled;
                    Config::setBedDefenseEnabled(newState);
@@ -536,110 +517,67 @@ namespace Render {
                    
                    NotificationManager::getInstance()->add("Module", newState ? "Bed Defense Activated" : "Bed Defense Disabled", newState ? NotificationType::Success : NotificationType::Warning);
                }
-               cy += 115;
-         }
+                cy += 115;
+
+                g_guiFont.drawString(cx, cy, "Chat Bypasser", applyAlpha(0xFFFFFFFF, alpha));
+                
+                 bool hBypass = isHovered(mx, my, mainX + 190, cy + 30, g_w - 210, 60);
+                 glDisable(GL_TEXTURE_2D);
+                 DWORD bypCol = hBypass ? 0xFF222226 : THEME_CARD;
+                 RenderUtils::drawRoundedRect(mainX + 190, cy + 30, g_w - 210, 60, 6.0f, bypCol, 0.6f * alpha);
+                 if (hBypass) RenderUtils::drawRect(mainX + 190, cy + 30, 3, 60, THEME_NAVY, alpha);
+                 
+                 glEnable(GL_TEXTURE_2D);
+                 g_guiFont.drawString(cx, cy + 40, "Bypass Chat Filter", applyAlpha(0xFFFFFFFF, alpha));
+                 g_guiFont.drawString(cx, cy + 58, "Allows sending messages that would normally be blocked", applyAlpha(0xFFA0A0A5, alpha));
+                 
+                 bool bypassEnabled = Config::isChatBypasserEnabled();
+                 glDisable(GL_TEXTURE_2D);
+                 float bypassSwX = mainX + g_w - 65;
+                 drawSwitch(14, bypassSwX, cy + 40, bypassEnabled, hBypass, alpha);
+                 glEnable(GL_TEXTURE_2D);
+                if (clickEvent && hBypass) {
+                    Config::setChatBypasserEnabled(!bypassEnabled);
+                    NotificationManager::getInstance()->add("Utils", !bypassEnabled ? "Bypasser Enabled" : "Bypasser Disabled", !bypassEnabled ? NotificationType::Success : NotificationType::Warning);
+                }
+                cy += 110;
+          }
          else if (s_activeTab == 0) {
               g_guiFont.drawString(cx, cy, "Overlays", applyAlpha(0xFFFFFFFF, alpha));
               cy += 40;
-              bool hCard1 = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
-              glDisable(GL_TEXTURE_2D);
-              drawRect(mainX + 190, cy - 10, g_w - 210, 60, THEME_CARD, 0.4f * alpha);
-              if (hCard1) drawRect(mainX + 190, cy - 10, 2, 60, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
-              g_guiFont.drawString(cx, cy, "Stats Overlay", applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx, cy + 18, "Display player skill metrics in a clean table", applyAlpha(0xFFA0A0A5, alpha));
-              
-              bool ovEnabled = StatsOverlay::isEnabled();
-              glDisable(GL_TEXTURE_2D);
-              float swX = mainX + g_w - 65;
-              drawSwitch(1, swX, cy, ovEnabled, hCard1);
-              glEnable(GL_TEXTURE_2D);
-              if (clickEvent && hCard1) StatsOverlay::setEnabled(!ovEnabled);
-              
-              cy += 75;
-              g_guiFont.drawString(cx, cy, "Overlay Mode", applyAlpha(0xFFFFFFFF, alpha));
-              cy += 30;
-
-              const char* modes[] = { "gui", "chat", "invisible" };
-              const char* modeLabels[] = { "GUI (Interactive)", "Chat (Text)", "Invisible (Hidden)" };
-              std::string currentMode = Config::getOverlayMode();
-              int currentIdx = 0;
-              for(int i=0; i<3; ++i) if(currentMode == modes[i]) currentIdx = i;
-
-              float dropW = 220.0f;
-              float dropH = 35.0f;
-              bool hovDrop = isHovered(mx, my, cx, cy, dropW, dropH);
-              
-              s_dropdownAnim += (s_isDropdownOpen ? 1.0f - s_dropdownAnim : 0.0f - s_dropdownAnim) * 0.15f;
-
-              glDisable(GL_TEXTURE_2D);
-              drawRect(cx, cy, dropW, dropH, THEME_CARD, 0.8f * alpha);
-              if (hovDrop) drawRect(cx, cy + dropH - 2, dropW, 2, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
-              
-              g_guiFont.drawString(cx + 10, cy + 10, modeLabels[currentIdx], applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx + dropW - 20, cy + 10, s_isDropdownOpen ? "-" : "+", applyAlpha(0xFFA0A0A5, alpha));
-
-              if (clickEvent && hovDrop) {
-                  s_isDropdownOpen = !s_isDropdownOpen;
-                  NotificationManager::getInstance()->add("Visuals", s_isDropdownOpen ? "Dropdown opened" : "Dropdown closed", NotificationType::Info);
-              }
-
-              if (s_dropdownAnim > 0.01f) {
-                  float listY = cy + dropH + 2;
-                  for (int i = 0; i < 3; ++i) {
-                      float itemY = listY + (i * dropH);
-                      bool hItem = isHovered(mx, my, cx, itemY, dropW, dropH);
-                      
-                      glDisable(GL_TEXTURE_2D);
-                      drawRect(cx, itemY, dropW, dropH, THEME_CARD, 0.95f * alpha * s_dropdownAnim);
-                      if (hItem) drawRect(cx, itemY, 2, dropH, THEME_NAVY, alpha * s_dropdownAnim);
-                      glEnable(GL_TEXTURE_2D);
-                      
-                      g_guiFont.drawString(cx + 15, itemY + 10, modeLabels[i], applyAlpha(currentIdx == i ? 0xFFFFFFFF : 0xFFA0A0A5, alpha * s_dropdownAnim));
-                      
-                      if (clickEvent && hItem && (s_dropdownAnim > 0.8f)) {
-                          Config::setOverlayMode(modes[i]);
-                          s_isDropdownOpen = false;
-                          NotificationManager::getInstance()->add("Visuals", "Mode set to: " + std::string(modeLabels[i]), NotificationType::Info);
-                      }
+               auto drawSettingsCard = [&](const char* title, const char* desc, bool& val, int id, float& cy_ref) {
+                  bool hover = isHovered(mx, my, mainX + 190, cy_ref - 10, g_w - 210, 62);
+                  RenderUtils::drawRoundedRect(mainX + 190, cy_ref - 10, g_w - 210, 62, 8.0f, THEME_CARD, 0.5f * alpha * s_contentAlpha);
+                  if (hover) {
+                      RenderUtils::drawRoundedRect(mainX + 190, cy_ref - 10, g_w - 210, 62, 8.0f, THEME_NAVY & 0x15FFFFFF, alpha * s_contentAlpha);
+                      RenderUtils::drawRoundedRect(mainX + 190, cy_ref - 10, 2, 62, 2.0f, THEME_NAVY, alpha * s_contentAlpha);
                   }
-                  cy += (3 * dropH) * s_dropdownAnim;
-              }
-              cy += 60;
 
-              cy += 15;
-              bool hCard2 = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
-              glDisable(GL_TEXTURE_2D);
-              drawRect(mainX + 190, cy - 10, g_w - 210, 60, THEME_CARD, 0.4f * alpha);
-              if (hCard2) drawRect(mainX + 190, cy - 10, 2, 60, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
-              g_guiFont.drawString(cx, cy, "Refined Notifications", applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx, cy + 18, "Enable silky smooth toast alerts", applyAlpha(0xFFA0A0A5, alpha));
+                  g_guiFont.drawString(cx, cy_ref, title, applyAlpha(0xFFFFFFFF, alpha * s_contentAlpha));
+                  g_guiFont.drawString(cx, cy_ref + 18, desc, applyAlpha(0xFFA0A0A5, alpha * s_contentAlpha), 0.45f);
+                  
+                  float swX = mainX + g_w - 65;
+                  drawSwitch(id, swX, cy_ref + 5, val, hover, alpha);
+                  
+                  if (clickEvent && hover) {
+                      val = !val;
+                  }
+                  cy_ref += 72;
+              };
+
+              bool ovEnabled = StatsOverlay::isEnabled();
+              bool oldOv = ovEnabled;
+              drawSettingsCard("Stats Overlay", "Display player skill metrics in a clean table", ovEnabled, 1, cy);
+              if (ovEnabled != oldOv) StatsOverlay::setEnabled(ovEnabled);
+
               bool notifEnabled = Config::isNotificationsEnabled();
-              glDisable(GL_TEXTURE_2D);
-              float swX2 = mainX + g_w - 65;
-              drawSwitch(2, swX2, cy, notifEnabled, hCard2);
-              glEnable(GL_TEXTURE_2D);
-              if (clickEvent && hCard2) Config::setNotificationsEnabled(!notifEnabled);
-              cy += 80;
+              drawSettingsCard("Refined Notifications", "Enable silky smooth toast alerts", notifEnabled, 2, cy);
+              Config::setNotificationsEnabled(notifEnabled);
 
-              g_guiFont.drawString(cx, cy, "Motion Blur", applyAlpha(0xFFFFFFFF, alpha));
-              cy += 25;
               bool blurEnabled = Config::isMotionBlurEnabled();
-              bool hBlurCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
-              glDisable(GL_TEXTURE_2D);
-              drawRect(mainX + 190, cy - 10, g_w - 210, 60, THEME_CARD, 0.4f * alpha);
-              if (hBlurCard) drawRect(mainX + 190, cy - 10, 2, 60, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
-              g_guiFont.drawString(cx, cy, "Enable Effect", applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx, cy + 18, "Adds a cinematic trail to camera movement", applyAlpha(0xFFA0A0A5, alpha));
-              glDisable(GL_TEXTURE_2D);
-              float swX3 = mainX + g_w - 65;
-              drawSwitch(4, swX3, cy, blurEnabled, hBlurCard);
-              glEnable(GL_TEXTURE_2D);
-              if (clickEvent && hBlurCard) Config::setMotionBlurEnabled(!blurEnabled);
-              cy += 70;
+              drawSettingsCard("Motion Blur", "Adds a cinematic trail to camera movement", blurEnabled, 4, cy);
+              Config::setMotionBlurEnabled(blurEnabled);
+              cy += 10;
 
               if (blurEnabled) {
                   g_guiFont.drawString(cx, cy, "Blur Intensity", applyAlpha(0xFFA0A0A5, alpha));
@@ -649,8 +587,8 @@ namespace Render {
                   float sliderVal = Config::getMotionBlurAmount();
                   
                   glDisable(GL_TEXTURE_2D);
-                  drawRect(cx, cy, sliderW, sliderH, 0xFF2A2A2E, alpha);
-                  drawRect(cx, cy, sliderW * sliderVal, sliderH, Config::getThemeColor(), alpha);
+                  RenderUtils::drawRect(cx, cy, sliderW, sliderH, 0xFF2A2A2E, alpha);
+                  RenderUtils::drawRect(cx, cy, sliderW * sliderVal, sliderH, Config::getThemeColor(), alpha);
                   glEnable(GL_TEXTURE_2D);
                   
                   bool hSlider = isHovered(mx, my, cx, cy - 5, sliderW, sliderH + 10);
@@ -659,17 +597,133 @@ namespace Render {
                       if (newVal < 0) newVal = 0;
                       if (newVal > 1) newVal = 1;
                       Config::setMotionBlurAmount(newVal);
-                  }
-                  cy += 30;
-              }
-              cy += 20;
-         }
+               }
+               cy += 30;
+           }
+           
+           cy += 20;
+           g_guiFont.drawString(cx, cy, "Table Customization", applyAlpha(0xFFFFFFFF, alpha));
+           cy += 35;
+
+           g_guiFont.drawString(cx, cy, "Sort By:", applyAlpha(0xFFA0A0A5, alpha));
+           const char* sModes[] = { "Team", "Star", "FK", "FKDR", "Wins", "WLR", "WS" };
+           std::string curSort = Config::getSortMode();
+           
+            float bx = cx + 80;
+            for(int i=0; i<7; ++i) {
+                bool hov = isHovered(mx, my, bx, cy - 5, 50, 25);
+                bool sel = (curSort == sModes[i]);
+                glDisable(GL_TEXTURE_2D);
+                RenderUtils::drawRoundedRect(bx, cy - 5, 50, 25, 4.0f, sel ? THEME_NAVY : (hov ? 0xFF35353A : THEME_CARD), alpha);
+                glEnable(GL_TEXTURE_2D);
+                g_guiFont.drawString(bx + 5, cy + 2, sModes[i], applyAlpha(sel ? 0xFFFFFFFF : 0xFF808085, alpha), 0.45f);
+                if (clickEvent && hov) {
+                    Config::setSortMode(sModes[i]);
+                    NotificationManager::getInstance()->add("Sort", "Sorting by " + std::string(sModes[i]), NotificationType::Info);
+                }
+                bx += 58;
+            }
+
+            cy += 40;
+            {
+                bool isDesc = Config::isTabSortDescending();
+                std::string currentOrder = isDesc ? "Descending" : "Ascending";
+                const char* orders[] = { "Ascending", "Descending" };
+
+                g_guiFont.drawString(cx, cy + 8, "Sort Order:", applyAlpha(0xFFA0A0A5, alpha));
+                
+                float dropX = cx + 100;
+                float dropW = 160.0f;
+                float dropH = 32.0f;
+                bool hovDrop = isHovered(mx, my, dropX, cy, dropW, dropH);
+                
+                s_sortOrderDropdownAnim += (s_isSortOrderDropdownOpen ? 1.0f - s_sortOrderDropdownAnim : 0.0f - s_sortOrderDropdownAnim) * 0.15f;
+
+                glDisable(GL_TEXTURE_2D);
+                RenderUtils::drawRoundedRect(dropX, cy, dropW, dropH, 6.0f, THEME_CARD, 0.8f * alpha);
+                if (hovDrop) RenderUtils::drawRoundedRect(dropX, cy + dropH - 3, dropW, 3.0f, 1.5f, THEME_NAVY, alpha);
+                glEnable(GL_TEXTURE_2D);
+                
+                g_guiFont.drawString(dropX + 10, cy + 10, currentOrder, applyAlpha(0xFFFFFFFF, alpha), 0.45f);
+                g_guiFont.drawString(dropX + dropW - 18, cy + 10, s_isSortOrderDropdownOpen ? "-" : "+", applyAlpha(0xFFA0A0A5, alpha), 0.45f);
+
+                if (clickEvent && hovDrop) {
+                    s_isSortOrderDropdownOpen = !s_isSortOrderDropdownOpen;
+                }
+
+                if (s_sortOrderDropdownAnim > 0.01f) {
+                    float listY = cy + dropH + 2;
+                    for (int i = 0; i < 2; ++i) {
+                        float itemY = listY + (i * dropH);
+                        bool hItem = isHovered(mx, my, dropX, itemY, dropW, dropH);
+                        
+                        glDisable(GL_TEXTURE_2D);
+                        RenderUtils::drawRoundedRect(dropX, itemY, dropW, dropH, 4.0f, THEME_CARD, 0.95f * alpha * s_sortOrderDropdownAnim);
+                        if (hItem) RenderUtils::drawRect(dropX, itemY, 3, dropH, THEME_NAVY, alpha * s_sortOrderDropdownAnim);
+                        glEnable(GL_TEXTURE_2D);
+                        
+                        g_guiFont.drawString(dropX + 15, itemY + 10, orders[i], applyAlpha(currentOrder == orders[i] ? 0xFFFFFFFF : 0xFFA0A0A5, alpha * s_sortOrderDropdownAnim), 0.45f);
+                        
+                        if (clickEvent && hItem && (s_sortOrderDropdownAnim > 0.8f)) {
+                            Config::setTabSortDescending(i == 1);
+                            s_isSortOrderDropdownOpen = false;
+                            NotificationManager::getInstance()->add("Sort", std::string("Order set to: ") + orders[i], NotificationType::Info);
+                        }
+                    }
+                    cy += (2 * dropH) * s_sortOrderDropdownAnim;
+                }
+            }
+           cy += 50;
+           g_guiFont.drawString(cx, cy, "Visible Columns:", applyAlpha(0xFFA0A0A5, alpha));
+           cy += 30;
+
+           struct ColToggle { std::string name; bool enabled; std::function<void(bool)> setter; };
+           ColToggle toggles[] = {
+               { "Star", Config::isShowStar(), [](bool b){ Config::setShowStar(b); } },
+               { "FK",   Config::isShowFk(),   [](bool b){ Config::setShowFk(b); } },
+               { "FKDR", Config::isShowFkdr(), [](bool b){ Config::setShowFkdr(b); } },
+               { "Wins", Config::isShowWins(), [](bool b){ Config::setShowWins(b); } },
+               { "WLR",  Config::isShowWlr(),  [](bool b){ Config::setShowWlr(b); } },
+               { "WS",   Config::isShowWs(),   [](bool b){ Config::setShowWs(b); } }
+           };
+
+            float tx = cx;
+            for(int i=0; i<6; ++i) {
+                float cardW = 125.0f;
+                float cardH = 36.0f;
+                bool hov = isHovered(mx, my, tx, cy, cardW, cardH);
+                
+                glDisable(GL_TEXTURE_2D);
+                DWORD baseCol = hov ? 0xFF222226 : THEME_CARD;
+                RenderUtils::drawRoundedRect(tx, cy, cardW, cardH, 5.0f, baseCol, 0.7f * alpha);
+                if (hov) RenderUtils::drawRect(tx, cy, 3, cardH, THEME_NAVY, alpha);
+                glEnable(GL_TEXTURE_2D);
+                
+                g_guiFont.drawString(tx + 12, cy + cardH/2.0f - 6.0f, toggles[i].name, applyAlpha(toggles[i].enabled ? 0xFFFFFFFF : 0xFF808085, alpha), 0.45f);
+                
+                glDisable(GL_TEXTURE_2D);
+                drawSwitch(100 + i, tx + cardW - 45, cy + (cardH - 18.0f)/2.0f, toggles[i].enabled, hov, alpha);
+                glEnable(GL_TEXTURE_2D);
+
+                if (clickEvent && hov) {
+                    toggles[i].setter(!toggles[i].enabled);
+                }
+                
+                if (i % 3 == 2) { 
+                    tx = cx; 
+                    cy += cardH + 10; 
+                } else {
+                    tx += cardW + 12;
+                }
+            }
+           cy += 60;
+      }
          else if (s_activeTab == 1) {
               g_guiFont.drawString(cx, cy, "Player Search", applyAlpha(0xFFFFFFFF, alpha));
               cy += 40;
               
-              drawRect(cx, cy, 360, 40, THEME_CARD, 0.6f * alpha);
-              if (s_typingSearch) drawRect(cx, cy, 2, 40, THEME_NAVY, alpha);
+               RenderUtils::drawRoundedRect(cx, cy, 360, 40, 6.0f, THEME_CARD, 0.6f * alpha);
+               if (s_typingSearch) RenderUtils::drawRect(cx, cy, 2, 40, THEME_NAVY, alpha);
               
               bool hSearch = isHovered(mx, my, cx, cy, 360, 40);
               
@@ -747,16 +801,17 @@ namespace Render {
               cy += 40;
               
               bool tagsEnabled = Config::isTagsEnabled();
-              bool hMasterCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
-              glDisable(GL_TEXTURE_2D);
-              drawRect(mainX + 190, cy - 10, g_w - 210, 60, THEME_CARD, 0.4f * alpha);
-              if (hMasterCard) drawRect(mainX + 190, cy - 10, 2, 60, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
-              g_guiFont.drawString(cx, cy, "Enable Tags", applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx, cy + 18, "Master switch for all tagging services", applyAlpha(0xFFA0A0A5, alpha));
-              glDisable(GL_TEXTURE_2D);
-              drawSwitch(10, mainX + g_w - 65, cy, tagsEnabled, hMasterCard);
-              glEnable(GL_TEXTURE_2D);
+               bool hMasterCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
+               glDisable(GL_TEXTURE_2D);
+               DWORD mastCol = hMasterCard ? 0xFF222226 : THEME_CARD;
+               RenderUtils::drawRoundedRect(mainX + 190, cy - 10, g_w - 210, 60, 6.0f, mastCol, 0.6f * alpha);
+               if (hMasterCard) RenderUtils::drawRect(mainX + 190, cy - 10, 3, 60, THEME_NAVY, alpha);
+               glEnable(GL_TEXTURE_2D);
+               g_guiFont.drawString(cx, cy, "Enable Tags", applyAlpha(0xFFFFFFFF, alpha));
+               g_guiFont.drawString(cx, cy + 18, "Master switch for all tagging services", applyAlpha(0xFFA0A0A5, alpha));
+               glDisable(GL_TEXTURE_2D);
+               drawSwitch(10, mainX + g_w - 65, cy, tagsEnabled, hMasterCard, alpha);
+               glEnable(GL_TEXTURE_2D);
               
               if (clickEvent && hMasterCard) {
                   Config::setTagsEnabled(!tagsEnabled);
@@ -778,8 +833,8 @@ namespace Render {
                   s_tagsDropdownAnim += (s_isTagsDropdownOpen ? 1.0f - s_tagsDropdownAnim : 0.0f - s_tagsDropdownAnim) * 0.15f;
 
                   glDisable(GL_TEXTURE_2D);
-                  drawRect(cx, cy, dropW, dropH, THEME_CARD, 0.8f * alpha);
-                  if (hovDrop) drawRect(cx, cy + dropH - 2, dropW, 2, THEME_NAVY, alpha);
+                  RenderUtils::drawRoundedRect(cx, cy, dropW, dropH, 6.0f, THEME_CARD, 0.8f * alpha);
+                  if (hovDrop) RenderUtils::drawRoundedRect(cx, cy + dropH - 3, dropW, 3.0f, 1.5f, THEME_NAVY, alpha);
                   glEnable(GL_TEXTURE_2D);
                   
                   g_guiFont.drawString(cx + 10, cy + 10, currentService, applyAlpha(0xFFFFFFFF, alpha));
@@ -796,8 +851,8 @@ namespace Render {
                           bool hItem = isHovered(mx, my, cx, itemY, dropW, dropH);
                           
                           glDisable(GL_TEXTURE_2D);
-                          drawRect(cx, itemY, dropW, dropH, THEME_CARD, 0.95f * alpha * s_tagsDropdownAnim);
-                          if (hItem) drawRect(cx, itemY, 2, dropH, THEME_NAVY, alpha * s_tagsDropdownAnim);
+                           RenderUtils::drawRoundedRect(cx, itemY, dropW, dropH, 4.0f, THEME_CARD, 0.95f * alpha * s_tagsDropdownAnim);
+                           if (hItem) RenderUtils::drawRect(cx, itemY, 3, dropH, THEME_NAVY, alpha * s_tagsDropdownAnim);
                           glEnable(GL_TEXTURE_2D);
                           
                           g_guiFont.drawString(cx + 15, itemY + 10, services[i], applyAlpha(currentService == services[i] ? 0xFFFFFFFF : 0xFFA0A0A5, alpha * s_tagsDropdownAnim));
@@ -814,8 +869,8 @@ namespace Render {
 
                   g_guiFont.drawString(cx, cy, "Urchin API Key", applyAlpha(0xFFA0A0A5, alpha));
                   cy += 20;
-                  drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
-                  if (s_typingUrchinKey) drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
+                  RenderUtils::drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
+                  if (s_typingUrchinKey) RenderUtils::drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
                   std::string dispUrchinKey = s_typingUrchinKey ? s_urchinKeyInput : (Config::getUrchinApiKey().empty() ? "None (Rate-limited)" : "********************");
                   if (s_typingUrchinKey && (GetTickCount64() / 500) % 2 == 0) dispUrchinKey += "|";
                   g_guiFont.drawString(cx + 10, cy + 10, dispUrchinKey, applyAlpha(0xFFFFFFFF, alpha));
@@ -830,8 +885,8 @@ namespace Render {
 
                   g_guiFont.drawString(cx, cy, "Seraph API Key", applyAlpha(0xFFA0A0A5, alpha));
                   cy += 20;
-                  drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
-                  if (s_typingSeraphKey) drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
+                  RenderUtils::drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
+                  if (s_typingSeraphKey) RenderUtils::drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
                   std::string dispSeraphKey = s_typingSeraphKey ? s_seraphKeyInput : (Config::getSeraphApiKey().empty() ? "None" : "********************");
                   if (s_typingSeraphKey && (GetTickCount64() / 500) % 2 == 0) dispSeraphKey += "|";
                   g_guiFont.drawString(cx + 10, cy + 10, dispSeraphKey, applyAlpha(0xFFFFFFFF, alpha));
@@ -922,8 +977,8 @@ namespace Render {
 
               g_guiFont.drawString(cx, cy, "Hypixel API Key", applyAlpha(0xFFA0A0A5, alpha));
               cy += 20;
-              drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
-              if (s_typingApiKey) drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
+              RenderUtils::drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
+              if (s_typingApiKey) RenderUtils::drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
               
               if (!s_typingApiKey) s_apiKeyInput = Config::getApiKey();
               
@@ -948,24 +1003,25 @@ namespace Render {
               g_guiFont.drawString(cx, cy, "AutoGG Settings", applyAlpha(0xFFFFFFFF, alpha));
               cy += 30;
               bool aggEnabled = Config::isAutoGGEnabled();
-              bool hAggCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
-              glDisable(GL_TEXTURE_2D);
-              drawRect(mainX + 190, cy - 10, g_w - 210, 60, THEME_CARD, 0.4f * alpha);
-              if (hAggCard) drawRect(mainX + 190, cy - 10, 2, 60, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
-              g_guiFont.drawString(cx, cy, "AutoGG Module", applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx, cy + 18, "Automatically send a message when game ends", applyAlpha(0xFFA0A0A5, alpha));
-              glDisable(GL_TEXTURE_2D);
-              float aggSwX = mainX + g_w - 65;
-              drawSwitch(3, aggSwX, cy, aggEnabled, hAggCard);
-              glEnable(GL_TEXTURE_2D);
+               bool hAggCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
+               glDisable(GL_TEXTURE_2D);
+               DWORD aggCol = hAggCard ? 0xFF222226 : THEME_CARD;
+               RenderUtils::drawRoundedRect(mainX + 190, cy - 10, g_w - 210, 60, 6.0f, aggCol, 0.6f * alpha);
+               if (hAggCard) RenderUtils::drawRect(mainX + 190, cy - 10, 3, 60, THEME_NAVY, alpha);
+               glEnable(GL_TEXTURE_2D);
+               g_guiFont.drawString(cx, cy, "AutoGG Module", applyAlpha(0xFFFFFFFF, alpha));
+               g_guiFont.drawString(cx, cy + 18, "Automatically send a message when game ends", applyAlpha(0xFFA0A0A5, alpha));
+               glDisable(GL_TEXTURE_2D);
+               float aggSwX = mainX + g_w - 65;
+               drawSwitch(3, aggSwX, cy, aggEnabled, hAggCard, alpha);
+               glEnable(GL_TEXTURE_2D);
               if (clickEvent && hAggCard) Config::setAutoGGEnabled(!aggEnabled);
               
               cy += 75;
               g_guiFont.drawString(cx, cy, "Custom GG Message", applyAlpha(0xFFA0A0A5, alpha));
               cy += 20;
-              drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
-              if (s_typingAutoGG) drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
+              RenderUtils::drawRect(cx, cy, 350, 35, THEME_CARD, 0.6f * alpha);
+              if (s_typingAutoGG) RenderUtils::drawRect(cx, cy, 2, 35, THEME_NAVY, alpha);
               
               if (s_autoGGInput.empty() && !s_typingAutoGG) s_autoGGInput = Config::getAutoGGMessage();
               std::string dispGG = s_autoGGInput;
@@ -978,17 +1034,38 @@ namespace Render {
                    s_typingApiKey = s_typingSearch = s_typingUrchinKey = false;
                    NotificationManager::getInstance()->add("Input", "AutoGG message focused", NotificationType::Info);
                } else if (clickEvent) {
-                   if (s_typingAutoGG) {
+                  if (s_typingAutoGG) {
                        Config::setAutoGGMessage(s_autoGGInput);
                        NotificationManager::getInstance()->add("AutoGG", "Custom message saved", NotificationType::Success);
                    }
                    s_typingAutoGG = false;
                }
+          
+          cy += 65;
+          g_guiFont.drawString(cx, cy, "Discord Rich Presence", applyAlpha(0xFFFFFFFF, alpha));
+          cy += 30;
+          bool discordEnabled = Config::isDiscordRpcEnabled();
+           bool hDiscordCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60);
+           glDisable(GL_TEXTURE_2D);
+           DWORD discCol = hDiscordCard ? 0xFF222226 : THEME_CARD;
+           RenderUtils::drawRoundedRect(mainX + 190, cy - 10, g_w - 210, 60, 6.0f, discCol, 0.6f * alpha);
+           if (hDiscordCard) RenderUtils::drawRect(mainX + 190, cy - 10, 3, 60, THEME_NAVY, alpha);
+           glEnable(GL_TEXTURE_2D);
+           g_guiFont.drawString(cx, cy, "Broadcasting Status", applyAlpha(0xFFFFFFFF, alpha));
+           g_guiFont.drawString(cx, cy + 18, "Show your activity on Discord", applyAlpha(0xFFA0A0A5, alpha));
+           glDisable(GL_TEXTURE_2D);
+           float discordSwX = mainX + g_w - 65;
+           drawSwitch(15, discordSwX, cy, discordEnabled, hDiscordCard, alpha);
+           glEnable(GL_TEXTURE_2D);
+          if (clickEvent && hDiscordCard) {
+              Config::setDiscordRpcEnabled(!discordEnabled);
+              NotificationManager::getInstance()->add("Discord", discordEnabled ? "Rich Presence Disabled" : "Rich Presence Enabled", !discordEnabled ? NotificationType::Success : NotificationType::Warning);
+          }
 
-              cy += 60;
+          cy += 70;
               bool hover = isHovered(mx, my, cx, cy, 140, 35);
               glDisable(GL_TEXTURE_2D);
-              drawRect(cx, cy, 140, 35, hover ? THEME_NAVY : 0xFF2A2A2E, alpha); 
+              RenderUtils::drawRoundedRect(cx, cy, 140, 35, 6.0f, hover ? THEME_NAVY : 0xFF2A2A2E, alpha); 
               glEnable(GL_TEXTURE_2D);
               g_guiFont.drawString(cx + 20, cy + 10, "SAVE CONFIG", applyAlpha(0xFFFFFFFF, alpha));
               if (clickEvent && hover) {
@@ -1005,7 +1082,7 @@ namespace Render {
 
               bool hBind = isHovered(mx, my, cx, cy, 250, 35);
               glDisable(GL_TEXTURE_2D);
-              drawRect(cx, cy, 250, 35, s_waitingForKey ? THEME_NAVY : (hBind ? 0xFF35353A : THEME_CARD), alpha);
+              RenderUtils::drawRoundedRect(cx, cy, 250, 35, 6.0f, s_waitingForKey ? THEME_NAVY : (hBind ? 0xFF35353A : THEME_CARD), alpha);
               glEnable(GL_TEXTURE_2D);
               g_guiFont.drawString(cx + 20, cy + 10, keyText, applyAlpha(s_waitingForKey ? 0xFFFFFFFF : 0xFFA0A0A5, alpha));
               
@@ -1030,9 +1107,9 @@ namespace Render {
                   bool hPre = isHovered(mx, my, px, cy, presetBoxSize, presetBoxSize);
                   
                   glDisable(GL_TEXTURE_2D);
-                  drawRect(px, cy, presetBoxSize, presetBoxSize, presets[i], alpha);
-                  if (selected) drawRect(px, cy + presetBoxSize - 3, presetBoxSize, 3, 0xFFFFFFFF, alpha);
-                  if (hPre && !selected) drawRect(px, cy, presetBoxSize, 2, 0xFFFFFFFF, alpha * 0.6f);
+                  RenderUtils::drawRoundedRect(px, cy, presetBoxSize, presetBoxSize, 4.0f, presets[i], alpha);
+                  if (selected) RenderUtils::drawRoundedRect(px, cy + presetBoxSize - 3, presetBoxSize, 4.0f, 2.0f, 0xFFFFFFFF, alpha);
+                  if (hPre && !selected) RenderUtils::drawRoundedRect(px, cy, presetBoxSize, 2, 2.0f, 0xFFFFFFFF, alpha * 0.6f);
                   glEnable(GL_TEXTURE_2D);
                   
                   if (clickEvent && hPre) {
@@ -1051,20 +1128,21 @@ namespace Render {
               cy += 40;
 
               bool dbgGlobal = Config::isGlobalDebugEnabled();
-              bool hDbgCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60); 
-              
-              glDisable(GL_TEXTURE_2D);
-              drawRect(mainX + 190, cy - 10, g_w - 210, 60, THEME_CARD, 0.4f * alpha);
-              if (hDbgCard) drawRect(mainX + 190, cy - 10, 2, 60, THEME_NAVY, alpha);
-              glEnable(GL_TEXTURE_2D);
+               bool hDbgCard = isHovered(mx, my, mainX + 190, cy - 10, g_w - 210, 60); 
+               
+               glDisable(GL_TEXTURE_2D);
+               DWORD dbgCol = hDbgCard ? 0xFF222226 : THEME_CARD;
+               RenderUtils::drawRoundedRect(mainX + 190, cy - 10, g_w - 210, 60, 6.0f, dbgCol, 0.6f * alpha);
+               if (hDbgCard) RenderUtils::drawRect(mainX + 190, cy - 10, 3, 60, THEME_NAVY, alpha);
+               glEnable(GL_TEXTURE_2D);
 
-              g_guiFont.drawString(cx, cy, "Master Debug Switch", applyAlpha(0xFFFFFFFF, alpha));
-              g_guiFont.drawString(cx, cy + 18, "Master toggle for all client debug logs", applyAlpha(0xFFA0A0A5, alpha));
-              
-              float dbgSwX = mainX + g_w - 65;
-              glDisable(GL_TEXTURE_2D);
-              drawSwitch(5, dbgSwX, cy, dbgGlobal, hDbgCard);
-              glEnable(GL_TEXTURE_2D);
+               g_guiFont.drawString(cx, cy, "Master Debug Switch", applyAlpha(0xFFFFFFFF, alpha));
+               g_guiFont.drawString(cx, cy + 18, "Master toggle for all client debug logs", applyAlpha(0xFFA0A0A5, alpha));
+               
+               float dbgSwX = mainX + g_w - 65;
+               glDisable(GL_TEXTURE_2D);
+               drawSwitch(5, dbgSwX, cy, dbgGlobal, hDbgCard, alpha);
+               glEnable(GL_TEXTURE_2D);
 
               if (clickEvent && hDbgCard) Config::setGlobalDebugEnabled(!dbgGlobal);
               
@@ -1078,9 +1156,9 @@ namespace Render {
                       g_guiFont.drawString(cx, cy, title, applyAlpha(hov ? 0xFFFFFFFF : 0xFF808085, alpha));
                       float toggleX = cx + 180;
                       
-                      glDisable(GL_TEXTURE_2D);
-                      drawSwitch(id, toggleX, cy - 5, enabled, hov);
-                      glEnable(GL_TEXTURE_2D);
+                       glDisable(GL_TEXTURE_2D);
+                       drawSwitch(id, toggleX, cy - 5, enabled, hov, alpha);
+                       glEnable(GL_TEXTURE_2D);
                       
                       if (clickEvent && hov) Config::setDebugEnabled(cat, !enabled);
                       cy += 35;
@@ -1100,9 +1178,9 @@ namespace Render {
               g_guiFont.drawString(cx, cy, "Use DbgView to see live output.", applyAlpha(0xFF808085, alpha));
                cy += 40;
 
-               bool hTest = isHovered(mx, my, cx, cy, 200, 35);
                glDisable(GL_TEXTURE_2D);
-               drawRect(cx, cy, 200, 35, hTest ? THEME_NAVY : THEME_CARD, alpha);
+               bool hTest = isHovered(mx, my, cx, cy, 200, 35);
+               RenderUtils::drawRoundedRect(cx, cy, 200, 35, 6.0f, hTest ? THEME_NAVY : THEME_CARD, alpha);
                glEnable(GL_TEXTURE_2D);
                g_guiFont.drawString(cx + 30, cy + 10, "SEND TEST TOAST", applyAlpha(0xFFFFFFFF, alpha));
                if (clickEvent && hTest) {
@@ -1121,7 +1199,13 @@ namespace Render {
         glPopMatrix();
 
         glDisable(GL_TEXTURE_2D);
-        glColor4f(0.0f, 0.33f, 0.64f, s_animAlpha); 
+        {
+            DWORD c = THEME_NAVY;
+            float r = ((c >> 16) & 0xFF) / 255.0f;
+            float g = ((c >> 8) & 0xFF) / 255.0f;
+            float b = (c & 0xFF) / 255.0f;
+            glColor4f(r, g, b, s_animAlpha); 
+        }
         glBegin(GL_TRIANGLES);
         glVertex2f(mx, my);
         glVertex2f(mx, my + 15);

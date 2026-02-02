@@ -19,6 +19,8 @@ namespace ChatInterceptor {
     extern std::unordered_map<std::string, std::string> g_playerTeamColor;
     bool isInGame(const std::string& name);
     bool shouldAlert(const std::string& name);
+    bool isInHypixelGame();
+    int getGameMode();
 }
 
 

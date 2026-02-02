@@ -145,26 +145,58 @@ namespace
 	}
 
 	void cmd_tab(const std::string &args){
-		std::string a = args;
-		while (!a.empty() && a.front() == ' ') a.erase(a.begin());
-		while (!a.empty() && a.back() == ' ') a.pop_back();
+		std::istringstream iss(args);
+		std::string sub;
+		iss >> sub;
+		std::transform(sub.begin(), sub.end(), sub.begin(), ::tolower);
 
-		if (a == "on") {
+		if (sub == "on") {
 			Config::setTabEnabled(true);
 			ChatSDK::showPrefixed("§aTab Stats: §fEnabled");
 			return;
 		}
-		if (a == "off") {
+		if (sub == "off") {
 			Config::setTabEnabled(false);
 			ChatSDK::showPrefixed("§cTab Stats: §fDisabled");
 			return;
 		}
-		if (a == "fk" || a == "fkdr" || a == "wins" || a == "wlr") {
-			Config::setTabMode(a);
-			ChatSDK::showPrefixed("§aTab Mode set to: §f" + a);
+		
+		std::string val;
+		iss >> val;
+		std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+
+		if (sub == "display") {
+			if (val == "star" || val == "fk" || val == "fkdr" || val == "wins" || val == "wlr" || val == "ws" || val == "lvl") {
+				Config::setTabDisplayMode(val);
+				ChatSDK::showPrefixed("§aTab Display set to: §f" + val);
+			} else {
+				ChatSDK::showPrefixed("§cValid display metrics: §fstar, lvl, fk, fkdr, wins, wlr, ws");
+			}
 			return;
 		}
-		ChatSDK::showPrefixed("§cusage: §f.tab on|off|fk|fkdr|wins|wlr");
+		if (sub == "sort") {
+			if (val == "star" || val == "fk" || val == "fkdr" || val == "wins" || val == "wlr" || val == "ws" || val == "team") {
+				Config::setSortMode(val);
+				ChatSDK::showPrefixed("§aTab Sort set to: §f" + val);
+			} else {
+				ChatSDK::showPrefixed("§cValid sort metrics: §fstar, fk, fkdr, wins, wlr, ws, team");
+			}
+			return;
+		}
+		if (sub == "order") {
+			if (val == "asc" || val == "ascending") {
+				Config::setTabSortDescending(false);
+				ChatSDK::showPrefixed("§aSort Order: §fAscending");
+			} else if (val == "desc" || val == "descending") {
+				Config::setTabSortDescending(true);
+				ChatSDK::showPrefixed("§aSort Order: §fDescending");
+			} else {
+				ChatSDK::showPrefixed("§cusage: §f.tab order asc|desc");
+			}
+			return;
+		}
+
+		ChatSDK::showPrefixed("§7Usage: §f.tab on|off§7, §f.tab display <metric>§7, §f.tab sort <metric>§7, §f.tab order asc|desc");
 	}
 
 	void cmd_debugging(const std::string &args){

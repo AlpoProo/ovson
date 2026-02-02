@@ -1,6 +1,7 @@
 #include "StatsOverlay.h"
 #include "FontRenderer.h"
 #include "../Chat/ChatInterceptor.h"
+#include "RenderUtils.h"
 #include "../Config/Config.h"
 #include "../Services/Hypixel.h"
 #include "../Services/UrchinService.h"
@@ -332,19 +333,48 @@ void StatsOverlay::render(void* hdcPtr)
 	}
 
 	bool showTags = Config::isTagsEnabled();
-	float panelWidth = showTags ? 800.0f : 640.0f;
+	float currentX = 12.0f;
+	float colPlayer = currentX; currentX += 130.0f;
+	
+	float colTags = -1000.0f;
+	if (showTags) {
+		colTags = currentX; currentX += 160.0f;
+	}
+	
+	float colStar = -1000.0f;
+	if (Config::isShowStar()) {
+		colStar = currentX; currentX += 70.0f;
+	}
+	
+	float colFK = -1000.0f;
+	if (Config::isShowFk()) {
+		colFK = currentX; currentX += 85.0f;
+	}
+	
+	float colFKDR = -1000.0f;
+	if (Config::isShowFkdr()) {
+		colFKDR = currentX; currentX += 90.0f;
+	}
+	
+	float colWins = -1000.0f;
+	if (Config::isShowWins()) {
+		colWins = currentX; currentX += 85.0f;
+	}
+	
+	float colWLR = -1000.0f;
+	if (Config::isShowWlr()) {
+		colWLR = currentX; currentX += 85.0f;
+	}
+	
+	float colWS = -1000.0f;
+	if (Config::isShowWs()) {
+		colWS = currentX; currentX += 65.0f;
+	}
+
+	float panelWidth = currentX + 10.0f;
 	float rowHeight = 28.0f;
 	float headerHeight = 32.0f;
 	float panelHeight = headerHeight + (statsData.size() * rowHeight) + 10.0f; 
-	
-	float colPlayer = 12.0f;
-	float colTags   = showTags ? 150.0f : -1000.0f;
-	float colStar   = showTags ? 320.0f : 165.0f; 
-	float colFK     = showTags ? 390.0f : 235.0f;
-	float colFKDR   = showTags ? 480.0f : 325.0f;
-	float colWins   = showTags ? 570.0f : 415.0f;
-	float colWLR    = showTags ? 650.0f : 495.0f;
-	float colWS     = showTags ? 730.0f : 575.0f;
 
 	if (!s_isDragging && s_panelX < 0) { 
 		s_panelX = (screenWidth - panelWidth) / 2.0f;
@@ -384,15 +414,42 @@ void StatsOverlay::render(void* hdcPtr)
 		}
 	}
 
-	std::sort(statsData.begin(), statsData.end(), [](const auto& a, const auto& b) {
-		const std::string& teamA = a.second.teamColor;
-		const std::string& teamB = b.second.teamColor;
+	std::string sortMode = Config::getSortMode();
+	bool isDesc = Config::isTabSortDescending();
+
+	std::sort(statsData.begin(), statsData.end(), [sortMode, isDesc](const auto& a, const auto& b) {
+		const Hypixel::PlayerStats& sA = a.second;
+		const Hypixel::PlayerStats& sB = b.second;
+
+		auto compareNumeric = [isDesc](double valA, double valB) {
+			if (isDesc) return valA > valB;
+			return valA < valB;
+		};
+
+		if (sortMode == "Star") return compareNumeric((double)sA.bedwarsStar, (double)sB.bedwarsStar);
+		if (sortMode == "FK") return compareNumeric((double)sA.bedwarsFinalKills, (double)sB.bedwarsFinalKills);
+		if (sortMode == "FKDR") {
+			double fkdrA = (sA.bedwarsFinalDeaths == 0) ? (double)sA.bedwarsFinalKills : (double)sA.bedwarsFinalKills / sA.bedwarsFinalDeaths;
+			double fkdrB = (sB.bedwarsFinalDeaths == 0) ? (double)sB.bedwarsFinalKills : (double)sB.bedwarsFinalKills / sB.bedwarsFinalDeaths;
+			return compareNumeric(fkdrA, fkdrB);
+		}
+		if (sortMode == "Wins") return compareNumeric((double)sA.bedwarsWins, (double)sB.bedwarsWins);
+		if (sortMode == "WLR") {
+			double wlrA = (sA.bedwarsLosses == 0) ? (double)sA.bedwarsWins : (double)sA.bedwarsWins / sA.bedwarsLosses;
+			double wlrB = (sB.bedwarsLosses == 0) ? (double)sB.bedwarsWins : (double)sB.bedwarsWins / sB.bedwarsLosses;
+			return compareNumeric(wlrA, wlrB);
+		}
+		if (sortMode == "WS") return compareNumeric((double)sA.winstreak, (double)sB.winstreak);
+
+		const std::string& teamA = sA.teamColor;
+		const std::string& teamB = sB.teamColor;
 		
 		if (teamA.empty() && !teamB.empty()) return false;
 		if (!teamA.empty() && teamB.empty()) return true;
 		
 		if (teamA != teamB) {
-			return teamA < teamB;
+			if (isDesc) return teamA < teamB;
+			return teamA > teamB;
 		}
 		
 		return a.first < b.first;
@@ -430,38 +487,23 @@ void StatsOverlay::render(void* hdcPtr)
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_ALPHA_TEST);
-		glColor4f(0.0f, 0.0f, 0.0f, 0.6f);
-		glBegin(GL_QUADS);
-		glVertex2f(localX, localY);
-		glVertex2f(localX, localY + panelHeight);
-		glVertex2f(localX + panelWidth, localY + panelHeight);
-		glVertex2f(localX + panelWidth, localY);
-		glEnd();
-
-		glLineWidth(1.0f);
-		glColor4f(0.5f, 0.5f, 0.5f, 0.4f);
-		glBegin(GL_LINE_LOOP);
-		glVertex2f(localX, localY);
-		glVertex2f(localX, localY + panelHeight);
-		glVertex2f(localX + panelWidth, localY + panelHeight);
-		glVertex2f(localX + panelWidth, localY);
-		glEnd();
+		
+		// Premium rounded panel with glass-like background
+		RenderUtils::drawRoundedRect(localX, localY, panelWidth, panelHeight, 8.0f, 0xAA0A0A0C); // Semi-transparent black
+		RenderUtils::drawRoundedOutline(localX, localY, panelWidth, panelHeight, 8.0f, 1.5f, 0xFF252528); // Subtle border
 
 		float sepY = localY + headerHeight;
-		glBegin(GL_LINES);
-		glVertex2f(localX, sepY);
-		glVertex2f(localX + panelWidth, sepY);
-		glEnd();
+		RenderUtils::drawRect(localX + 5, sepY, panelWidth - 10, 1, 0xFF2A2A2E);
 
 		float headerTextY = localY + 9.0f; 
 		g_font.drawString(localX + colPlayer, headerTextY, "PLAYER", colorFromRGB(255, 255, 255));
 		if (showTags) g_font.drawString(localX + colTags,   headerTextY, "TAGS", colorFromRGB(255, 255, 255));
-		g_font.drawString(localX + colStar,   headerTextY, "STAR", colorFromRGB(255, 255, 255));
-		g_font.drawString(localX + colFK,     headerTextY, "F. KILLS", colorFromRGB(255, 255, 255));
-		g_font.drawString(localX + colFKDR,   headerTextY, "FKDR", colorFromRGB(255, 255, 255));
-		g_font.drawString(localX + colWins,   headerTextY, "WINS", colorFromRGB(255, 255, 255));
-		g_font.drawString(localX + colWLR,    headerTextY, "WLR", colorFromRGB(255, 255, 255));
-		g_font.drawString(localX + colWS,     headerTextY, "WS", colorFromRGB(255, 255, 255));
+		if (Config::isShowStar()) g_font.drawString(localX + colStar,   headerTextY, "STAR", colorFromRGB(255, 255, 255));
+		if (Config::isShowFk())   g_font.drawString(localX + colFK,     headerTextY, "F. KILLS", colorFromRGB(255, 255, 255));
+		if (Config::isShowFkdr()) g_font.drawString(localX + colFKDR,   headerTextY, "FKDR", colorFromRGB(255, 255, 255));
+		if (Config::isShowWins()) g_font.drawString(localX + colWins,   headerTextY, "WINS", colorFromRGB(255, 255, 255));
+		if (Config::isShowWlr())  g_font.drawString(localX + colWLR,    headerTextY, "WLR", colorFromRGB(255, 255, 255));
+		if (Config::isShowWs())   g_font.drawString(localX + colWS,     headerTextY, "WS", colorFromRGB(255, 255, 255));
 
 		float currentY = localY + headerHeight + 5.0f;
 		for (const auto& pair : statsData) {
@@ -561,14 +603,14 @@ void StatsOverlay::render(void* hdcPtr)
 
 			if (stats.isNicked) {
 				uint32_t nickedColor = colorFromRGB(170, 0, 0);
-				g_font.drawString(localX + colStar, currentY, "[NICKED]", nickedColor);
+				if (Config::isShowStar()) g_font.drawString(localX + colStar, currentY, "[NICKED]", nickedColor);
 			} else {
-				g_font.drawString(localX + colStar,   currentY, std::to_string(stats.bedwarsStar), colorForStar(stats.bedwarsStar));
-				g_font.drawString(localX + colFK,     currentY, std::to_string(stats.bedwarsFinalKills), colorForFinalKills(stats.bedwarsFinalKills));
-				g_font.drawString(localX + colFKDR,   currentY, fkdrSs.str(), colorForFKDR(fkdr));
-				g_font.drawString(localX + colWins,   currentY, std::to_string(stats.bedwarsWins), colorForWins(stats.bedwarsWins));
-				g_font.drawString(localX + colWLR,    currentY, wlrSs.str(), colorForWLR(wlr));
-				g_font.drawString(localX + colWS,     currentY, std::to_string(stats.winstreak), colorForWinstreak(stats.winstreak));
+				if (Config::isShowStar()) g_font.drawString(localX + colStar,   currentY, std::to_string(stats.bedwarsStar), colorForStar(stats.bedwarsStar));
+				if (Config::isShowFk())   g_font.drawString(localX + colFK,     currentY, std::to_string(stats.bedwarsFinalKills), colorForFinalKills(stats.bedwarsFinalKills));
+				if (Config::isShowFkdr()) g_font.drawString(localX + colFKDR,   currentY, fkdrSs.str(), colorForFKDR(fkdr));
+				if (Config::isShowWins()) g_font.drawString(localX + colWins,   currentY, std::to_string(stats.bedwarsWins), colorForWins(stats.bedwarsWins));
+				if (Config::isShowWlr())  g_font.drawString(localX + colWLR,    currentY, wlrSs.str(), colorForWLR(wlr));
+				if (Config::isShowWs())   g_font.drawString(localX + colWS,     currentY, std::to_string(stats.winstreak), colorForWinstreak(stats.winstreak));
 			}
 
 			currentY += rowHeight;

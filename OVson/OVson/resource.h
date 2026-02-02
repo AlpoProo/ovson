@@ -75,12 +75,13 @@
 #define IDR_TERRACOTTA_GREEN            262
 #define IDR_TERRACOTTA_RED              263
 #define IDR_TERRACOTTA_BLACK            264
+#define IDR_DISCORD_DLL                 265
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        265
+#define _APS_NEXT_RESOURCE_VALUE        266
 #define _APS_NEXT_COMMAND_VALUE         40001
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           101
