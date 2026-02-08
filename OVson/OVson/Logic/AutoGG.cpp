@@ -16,10 +16,10 @@ namespace Logic {
             chat.find("3rd Killer") != std::string::npos) 
         {
             static ULONGLONG lastGG = 0;
-            if (GetTickCount64() - lastGG < 5000) return;
+            if (GetTickCount64() - lastGG < 15000) return;
             lastGG = GetTickCount64();
 
-            Logger::log(Config::DebugCategory::General, "AutoGG Triggered by chat");
+            Logger::log(Config::DebugCategory::General, "AutoGG Triggered by chat: %s", chat.c_str());
 
             std::thread([]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));

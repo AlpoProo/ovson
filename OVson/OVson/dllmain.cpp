@@ -115,6 +115,12 @@ void init(void* instance) {
     Logger::shutdown();
     if (file) { fclose(file); file = nullptr; }
 
+    lc->Cleanup();
+
+    if (g_sharedFlag) {
+        InterlockedExchange((LONG*)g_sharedFlag, 0);
+    }
+
     FreeLibraryAndExitThread(static_cast<HMODULE>(instance), 0);
 }
 
@@ -151,11 +157,17 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
-        if (g_sharedFlag) { UnmapViewOfFile((LPCVOID)g_sharedFlag); g_sharedFlag = nullptr; }
-        if (g_sharedMap) { CloseHandle(g_sharedMap); g_sharedMap = nullptr; }
-        if (g_loadedEvent) { CloseHandle(g_loadedEvent); g_loadedEvent = nullptr; }
-        if (g_injectedMutex) { CloseHandle(g_injectedMutex); g_injectedMutex = nullptr; }
-        if (g_aliveEvent) { CloseHandle(g_aliveEvent); g_aliveEvent = nullptr; }
+        if (lpReserved == nullptr) {
+            if (g_sharedFlag) { 
+                InterlockedExchange((LONG*)g_sharedFlag, 0);
+                UnmapViewOfFile((LPCVOID)g_sharedFlag); 
+                g_sharedFlag = nullptr; 
+            }
+            if (g_sharedMap) { CloseHandle(g_sharedMap); g_sharedMap = nullptr; }
+            if (g_loadedEvent) { CloseHandle(g_loadedEvent); g_loadedEvent = nullptr; }
+            if (g_injectedMutex) { CloseHandle(g_injectedMutex); g_injectedMutex = nullptr; }
+            if (g_aliveEvent) { CloseHandle(g_aliveEvent); g_aliveEvent = nullptr; }
+        }
         break;
     }
     return TRUE;

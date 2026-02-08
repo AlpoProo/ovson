@@ -930,7 +930,7 @@ void BedDefenseManager::tick()
         forceScan();
     }
 
-    if (now - m_lastRevalidation >= 3000) {
+    if (now - m_lastRevalidation >= 500) {
         m_lastRevalidation = now;
         std::lock_guard<std::mutex> lock(m_bedMutex);
         for (auto& pair : m_beds) {

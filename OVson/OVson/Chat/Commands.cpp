@@ -443,6 +443,12 @@ void cmd_lookat(const std::string& args) {
 	}
 }
 
+void cmd_clearcache(const std::string& args) {
+	(void)args;
+	ChatInterceptor::clearAllCaches();
+	ChatSDK::showPrefixed("§aAll caches cleared! Stats will be re-fetched.");
+}
+
 void RegisterDefaultCommands(){
 	CommandRegistry::instance().registerCommand("echo", cmd_echo);
 	CommandRegistry::instance().registerCommand("help", cmd_help);
@@ -456,4 +462,5 @@ void RegisterDefaultCommands(){
 	CommandRegistry::instance().registerCommand("bedplates", cmd_bedplates);
 	CommandRegistry::instance().registerCommand("bedscan", cmd_bedscan);
 	CommandRegistry::instance().registerCommand("lookat", cmd_lookat);
+	CommandRegistry::instance().registerCommand("clearcache", cmd_clearcache);
 }

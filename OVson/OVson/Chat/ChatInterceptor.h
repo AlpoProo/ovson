@@ -21,6 +21,7 @@ namespace ChatInterceptor {
     bool shouldAlert(const std::string& name);
     bool isInHypixelGame();
     int getGameMode();
+    void clearAllCaches();
 }
 
 

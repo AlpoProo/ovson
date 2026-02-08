@@ -1,9 +1,11 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <optional>
 
 namespace Hypixel {
 	struct PlayerStats {
+		std::string tagsDisplay;
 		std::string uuid;
 		std::string displayName;
 		int networkLevel = 0;
@@ -15,10 +17,9 @@ namespace Hypixel {
 		int winstreak = 0;
 		std::string teamColor;
 		bool isNicked = false;
+        std::vector<std::string> rawTags;
 	};
 
 	std::optional<std::string> getUuidByName(const std::string& name);
 	std::optional<PlayerStats> getPlayerStats(const std::string& apiKey, const std::string& uuid);
 }
-
-

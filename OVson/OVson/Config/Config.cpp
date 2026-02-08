@@ -36,7 +36,8 @@ static bool g_tagsEnabled = false;
 static std::string g_activeTagService = "Urchin";
 static bool g_chatBypasserEnabled = false;
 static bool g_discordRpcEnabled = true;
-static std::string g_discordAppId = "";
+static std::string g_discordAppId = "1467865675262329019";
+static bool g_nickedBypass = true;
 static HMODULE g_hModule = nullptr;
 
 static bool g_debugGlobal = true;
@@ -239,10 +240,12 @@ bool Config::initialize(HMODULE self){
     else
         g_discordAppId = "1467865675262329019";
 
-    // Migration: If the loaded ID is the old broken one, force it to the new one
+    if (!parseJsonBool(all, "nickedBypass", g_nickedBypass))
+        g_nickedBypass = true;
+
     if (g_discordAppId == "1335272304856010773") {
         g_discordAppId = "1467865675262329019";
-        save(); // Save the new ID to config.json immediately
+        save();
     }
 
     if (parseJsonLine(all, "sortMode", val))
@@ -309,6 +312,7 @@ bool Config::save(){
         "  \"discordAppId\": \"%s\",\n"
         "  \"tabDisplayMode\": \"%s\",\n"
         "  \"tabSortDescending\": %s,\n"
+        "  \"nickedBypass\": %s,\n"
         "  \"sortMode\": \"%s\",\n"
         "  \"showStar\": %s,\n"
         "  \"showFk\": %s,\n"
@@ -349,6 +353,7 @@ bool Config::save(){
         g_discordAppId.c_str(),
         g_tabDisplayMode.c_str(), 
         g_tabSortDescending ? "true" : "false",
+        g_nickedBypass ? "true" : "false",
         g_sortMode.c_str(),
         g_showStar ? "true" : "false",
         g_showFk ? "true" : "false",
@@ -391,6 +396,9 @@ void Config::setDebugging(bool enabled) { g_debugging = enabled; save(); }
 
 bool Config::isBedDefenseEnabled() { return g_bedDefenseEnabled; }
 void Config::setBedDefenseEnabled(bool enabled) { g_bedDefenseEnabled = enabled; save(); }
+
+bool Config::isNickedBypass() { return g_nickedBypass; }
+void Config::setNickedBypass(bool enabled) { g_nickedBypass = enabled; save(); }
 
 int Config::getClickGuiKey() { return g_clickGuiKey; }
 void Config::setClickGuiKey(int key) { g_clickGuiKey = key; save(); }
@@ -480,4 +488,3 @@ bool Config::isShowWlr() { return g_showWlr; }
 void Config::setShowWlr(bool show) { g_showWlr = show; save(); }
 bool Config::isShowWs() { return g_showWs; }
 void Config::setShowWs(bool show) { g_showWs = show; save(); }
-

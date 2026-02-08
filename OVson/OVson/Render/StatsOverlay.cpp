@@ -470,7 +470,7 @@ void StatsOverlay::render(void* hdcPtr)
 	}
 
 	static DWORD s_lastRebuildTime = 0;
-	DWORD now = GetTickCount();
+	ULONGLONG now = GetTickCount64();
 	if ((now - s_lastRebuildTime) > 500) {
 		s_dirty = true;
 	}

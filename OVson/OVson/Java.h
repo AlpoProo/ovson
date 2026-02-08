@@ -78,6 +78,10 @@ public:
         GetClass("net.minecraft.client.gui.GuiTextField");
     }
 
+    virtual ~Lunar() {
+        Cleanup();
+    }
+
     jclass GetClass(const std::string& className) {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         JNIEnv* env = getEnv();
@@ -113,10 +117,16 @@ public:
 
     void Cleanup() {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        if (classes.empty()) return;
+
         JNIEnv* env = getEnv();
-        if (!env) return;
+        if (!env) {
+            classes.clear();
+            return;
+        }
+
         for (auto& pair : classes) {
-            env->DeleteGlobalRef(pair.second);
+            if (pair.second) env->DeleteGlobalRef(pair.second);
         }
         classes.clear();
     }

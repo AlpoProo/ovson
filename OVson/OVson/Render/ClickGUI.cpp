@@ -541,6 +541,28 @@ namespace Render {
                     NotificationManager::getInstance()->add("Utils", !bypassEnabled ? "Bypasser Enabled" : "Bypasser Disabled", !bypassEnabled ? NotificationType::Success : NotificationType::Warning);
                 }
                 cy += 110;
+
+                g_guiFont.drawString(cx, cy, "Faster Stats", applyAlpha(0xFFFFFFFF, alpha));
+                bool hNicked = isHovered(mx, my, mainX + 190, cy + 30, g_w - 210, 60);
+                glDisable(GL_TEXTURE_2D);
+                DWORD nickCol = hNicked ? 0xFF222226 : THEME_CARD;
+                RenderUtils::drawRoundedRect(mainX + 190, cy + 30, g_w - 210, 60, 6.0f, nickCol, 0.6f * alpha);
+                if (hNicked) RenderUtils::drawRect(mainX + 190, cy + 30, 3, 60, THEME_NAVY, alpha);
+
+                glEnable(GL_TEXTURE_2D);
+                g_guiFont.drawString(cx, cy + 40, "Direct UUID Fetching", applyAlpha(0xFFFFFFFF, alpha));
+                g_guiFont.drawString(cx, cy + 58, "Use direct game UUIDs for instant stats", applyAlpha(0xFFA0A0A5, alpha));
+
+                bool nickedBypass = Config::isNickedBypass();
+                glDisable(GL_TEXTURE_2D);
+                float nickSwX = mainX + g_w - 65;
+                drawSwitch(20, nickSwX, cy + 40, nickedBypass, hNicked, alpha);
+                glEnable(GL_TEXTURE_2D);
+                if (clickEvent && hNicked) {
+                    Config::setNickedBypass(!nickedBypass);
+                    NotificationManager::getInstance()->add("Utils", !nickedBypass ? "Nicked Bypass Enabled" : "Nicked Bypass Disabled", !nickedBypass ? NotificationType::Success : NotificationType::Warning);
+                }
+                cy += 110;
           }
          else if (s_activeTab == 0) {
               g_guiFont.drawString(cx, cy, "Overlays", applyAlpha(0xFFFFFFFF, alpha));
@@ -1187,7 +1209,17 @@ namespace Render {
                    NotificationManager::getInstance()->add("System", "Toast notifications are working!", NotificationType::Success);
                }
                cy += 50;
-              cy += 50;
+
+               bool hClear = isHovered(mx, my, cx, cy, 200, 35);
+               glDisable(GL_TEXTURE_2D);
+               RenderUtils::drawRoundedRect(cx, cy, 200, 35, 6.0f, hClear ? 0xFF991111 : THEME_CARD, alpha);
+               glEnable(GL_TEXTURE_2D);
+               g_guiFont.drawString(cx + 35, cy + 10, "CLEAR CACHE", applyAlpha(0xFFFFFFFF, alpha));
+               if (clickEvent && hClear) {
+                   ChatInterceptor::clearAllCaches();
+                   NotificationManager::getInstance()->add("System", "All caches cleared and reset!", NotificationType::Success);
+               }
+               cy += 50;
          }
 
          float contentHeight = (cy + s_scrollOffset) - startCy;

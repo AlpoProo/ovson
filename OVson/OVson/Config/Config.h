@@ -39,6 +39,9 @@ namespace Config {
 	bool isBedDefenseEnabled();
 	void setBedDefenseEnabled(bool enabled);
 
+    bool isNickedBypass();
+    void setNickedBypass(bool enabled);
+
     // click gui settings
     int getClickGuiKey();
     void setClickGuiKey(int key);
