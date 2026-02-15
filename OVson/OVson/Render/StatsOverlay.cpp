@@ -488,9 +488,8 @@ void StatsOverlay::render(void* hdcPtr)
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_ALPHA_TEST);
 		
-		// Premium rounded panel with glass-like background
-		RenderUtils::drawRoundedRect(localX, localY, panelWidth, panelHeight, 8.0f, 0xAA0A0A0C); // Semi-transparent black
-		RenderUtils::drawRoundedOutline(localX, localY, panelWidth, panelHeight, 8.0f, 1.5f, 0xFF252528); // Subtle border
+		RenderUtils::drawRoundedRect(localX, localY, panelWidth, panelHeight, 8.0f, 0xAA0A0A0C);
+		RenderUtils::drawRoundedOutline(localX, localY, panelWidth, panelHeight, 8.0f, 1.5f, 0xFF252528);
 
 		float sepY = localY + headerHeight;
 		RenderUtils::drawRect(localX + 5, sepY, panelWidth - 10, 1, 0xFF2A2A2E);
@@ -573,11 +572,9 @@ void StatsOverlay::render(void* hdcPtr)
                 bool hasS = sRes && !sRes->tags.empty() && (activeS == "Seraph" || activeS == "Both");
 
                 if (hasU && hasS) {
-                    // Abbreviate both
                     for (const auto& tag : uRes->tags) drawAbbr(tag.type, colorFromRGB(220, 20, 60), true);
                     for (const auto& tag : sRes->tags) drawAbbr(tag.type, colorFromRGB(255, 85, 85), false);
                 } else {
-                    // Show full if only one
                     if (hasU) {
                         for (const auto& tag : uRes->tags) {
                             uint32_t c = colorFromRGB(255, 255, 255);

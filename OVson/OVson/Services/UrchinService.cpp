@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <chrono>
+#include "../Utils/ThreadTracker.h"
 
 namespace Urchin {
     struct CachedTags {
@@ -123,6 +124,7 @@ namespace Urchin {
             g_pendingFetches[username] = now;
         }
 
+        ThreadTracker::increment();
         std::thread([username, now]() {
             std::string url = "https://urchin.ws/player/" + username + "?sources=MANUAL";
             std::string apiKey = Config::getUrchinApiKey();
@@ -182,6 +184,7 @@ namespace Urchin {
             } else {
                 Logger::log(Config::DebugCategory::Urchin, "!!! Urchin Failed: %s - Reason: %s !!!", username.c_str(), failReason.c_str());
             }
+            ThreadTracker::decrement();
         }).detach();
 
         return std::nullopt;

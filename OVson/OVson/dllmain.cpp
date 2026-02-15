@@ -20,6 +20,7 @@
 #include "Render/RenderHook.h"
 #include "Render/TextureLoader.h"
 #include "Services/DiscordManager.h"
+#include "Utils/ThreadTracker.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -110,7 +111,8 @@ void init(void* instance) {
     try {
         Services::DiscordManager::getInstance()->shutdown();
     } catch (...) {}
-    Sleep(100);
+    
+    ThreadTracker::waitForAll();
 
     Logger::shutdown();
     if (file) { fclose(file); file = nullptr; }

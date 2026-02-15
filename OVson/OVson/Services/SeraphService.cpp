@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <chrono>
+#include "../Utils/ThreadTracker.h"
 
 namespace Seraph {
     struct CachedTags {
@@ -78,6 +79,7 @@ namespace Seraph {
             g_pendingFetches[uuid] = now;
         }
 
+        ThreadTracker::increment();
         std::thread([username, uuid]() {
             std::string url = "https://api.seraph.si/" + uuid + "/blacklist";
             std::string apiKey = Config::getSeraphApiKey();
@@ -137,6 +139,7 @@ namespace Seraph {
                 std::lock_guard<std::mutex> lock(g_pendingMutex);
                 g_pendingFetches.erase(uuid);
             }
+            ThreadTracker::decrement();
         }).detach();
 
         return std::nullopt;

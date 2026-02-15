@@ -22,6 +22,8 @@ static bool g_hookInstalled = false;
 static std::queue<std::function<void()>> g_taskQueue;
 static std::mutex g_queueMutex;
 static float g_frameDelta = 0.0f;
+static std::atomic<bool> g_unloading{false};
+static std::atomic<int> g_threadsInHook{0};
 
 typedef void (__stdcall *PFNGLUSEPROGRAMPROC_LOCAL)(unsigned int);
 static PFNGLUSEPROGRAMPROC_LOCAL g_glUseProgram = nullptr;
@@ -202,6 +204,9 @@ LRESULT CALLBACK hookedWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 }
 
 BOOL WINAPI hookedSwapBuffers(HDC hdc) {
+    if (g_unloading) return originalSwapBuffers(hdc);
+    g_threadsInHook++;
+    
 	static int frameCount = 0;
 	frameCount++;
 	
@@ -286,6 +291,7 @@ BOOL WINAPI hookedSwapBuffers(HDC hdc) {
     }
     Render::ClickGUI::render(hdc);
 
+    g_threadsInHook--;
 	return originalSwapBuffers(hdc);
 }
 
@@ -369,6 +375,14 @@ void RenderHook::uninstall()
 	writeDebugLog("RenderHook::uninstall() called");
 	
 	if (g_hookInstalled) {
+        g_unloading = true;
+        
+        int retries = 0;
+        while (g_threadsInHook > 0 && retries < 100) {
+            Sleep(10);
+            retries++;
+        }
+
 		if (pMH_DisableHook) {
 			pMH_DisableHook(MH_ALL_HOOKS);
 			writeDebugLog("MinHook disabled");
