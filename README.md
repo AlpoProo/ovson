@@ -9,3 +9,5 @@ you will figure out the rest if ure not stupid
 
 special thanks to pree for joining my private games and helping me debug ts
 
+will be added:
+vanilla/badlion support
